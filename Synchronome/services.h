@@ -27,6 +27,7 @@
 void *Service_1_frame_acquisition(void *threadp);
 void *Service_2_frame_process(void *threadp);
 void *Service_3_frame_storage(void *threadp);
+void *writeback_dump(void *threadp);
 
 
 #endif // _SERVICES_H_

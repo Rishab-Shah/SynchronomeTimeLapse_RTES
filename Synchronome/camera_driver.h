@@ -29,7 +29,7 @@ enum io_method
 
 #define START_UP_FRAMES         (8)
 #define LAST_FRAMES             (1)
-#define CAPTURE_FRAMES          (1800+LAST_FRAMES)
+#define CAPTURE_FRAMES          (300+LAST_FRAMES)
 #define FRAMES_TO_ACQUIRE       (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
 
 void errno_exit(const char *s);

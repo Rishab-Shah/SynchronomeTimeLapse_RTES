@@ -20,4 +20,4 @@ services.o	: services.c services.h
 	 $(CC) $(LDFLAGS) -c services.c
 
 clean :
-	rm -f *.o *.d frames/* run
+	rm -f *.o *.d frames/* run gmon.out

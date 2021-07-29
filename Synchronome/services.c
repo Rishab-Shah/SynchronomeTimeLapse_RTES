@@ -2,15 +2,18 @@
 
 int abortS1=FALSE, abortS2=FALSE, abortS3=FALSE;
 sem_t semS1, semS2, semS3;
- int abortTest=FALSE;
- timer_t timer_1;
- struct itimerspec last_itime;
+int abortTest=FALSE;
+timer_t timer_1;
+struct itimerspec last_itime;
 struct itimerspec itime = {{1,0}, {1,0}};
 double start_realtime;
 unsigned long long seqCnt=0;
 void Sequencer(int id);
 
 extern void mainloop(void);
+
+
+
 
 void Sequencer(int id)
 {
@@ -37,22 +40,21 @@ void Sequencer(int id)
     seqCnt++;
     // Release each service at a sub-rate of the generic sequencer rate
 
-    // Servcie_1 @ 30 Hz = 33.33msec
-    /*if((seqCnt % 3.33) == 0)*/ 
-      sem_post(&semS1);
+    // Service_1 @ 30 Hz = 33.33msec
+    if((seqCnt % 30) == 0) sem_post(&semS1); //1sec
 
     // Service_2 @ 10 Hz = 100 msec
-    if((seqCnt % 3) == 0) sem_post(&semS2);
+    if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec
 
     // Service_3 @ 1 Hz = 1 second
-    if((seqCnt % 30) == 0) sem_post(&semS3);
+    if((seqCnt % 54) == 0) sem_post(&semS3); //1.8sec
 }
 
 void *Service_1_frame_acquisition(void *threadp)
 {
-    printf("Code ran \n");
-    mainloop();
-    #if 0
+    printf("Code ran Service_1\n");
+    
+
     struct timespec current_time_val;
     double current_realtime;
     unsigned long long S1Cnt=0;
@@ -67,40 +69,39 @@ void *Service_1_frame_acquisition(void *threadp)
     {
         // wait for service request from the sequencer, a signal handler or ISR in kernel
          //printf("Code ran 1\n");
-        //sem_wait(&semS1);
+        sem_wait(&semS1);
 
- //printf("Code ran 2 \n");
+         //printf("Code ran 2 \n");
         if(abortS1) break;
             S1Cnt++;
 
+        mainloop();
         // on order of up to milliseconds of latency to get time
         clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
         syslog(LOG_CRIT, "S1_SERVICE at 30 Hz on core %d for release %llu @ msec=%6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
 
-        if(S1Cnt >= (30)*(60))
+        if(S1Cnt >= (6)*(10))
         {
-            abortS1=TRUE;
-            
-            
-                    // on order of up to milliseconds of latency to get time
-        clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-        syslog(LOG_CRIT, "S1_ENDS 30 Hz on core %d for release %llu @ msec=%6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
-            sem_post(&semS1);
+          abortS1=TRUE;
+               
+          // on order of up to milliseconds of latency to get time
+          clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+          syslog(LOG_CRIT, "S1_ENDS 30 Hz on core %d for release %llu @ msec=%6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+          sem_post(&semS1);
             
 
         } 
     }
 
     // Resource shutdown here
-    //
-    #endif
+
     pthread_exit((void *)0);
 }
 
 
 void *Service_2_frame_process(void *threadp)
 {
-
+    printf("Code ran Service_2\n");
     
     struct timespec current_time_val;
     double current_realtime;
@@ -123,7 +124,7 @@ void *Service_2_frame_process(void *threadp)
         clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
         syslog(LOG_CRIT, "S2_SERVICE at 10 Hz on core %d for release %llu @ msec=%6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
             
-        if(S2Cnt >= (60)*(10))
+        if(S2Cnt  >= (4)*(10))
         {
             abortS2=TRUE;
             
@@ -142,6 +143,7 @@ void *Service_2_frame_process(void *threadp)
 
 void *Service_3_frame_storage(void *threadp)
 {
+    printf("Code ran Service_3\n");
     
     struct timespec current_time_val;
     double current_realtime;
@@ -164,7 +166,7 @@ void *Service_3_frame_storage(void *threadp)
         clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
         syslog(LOG_CRIT, "S3_SERVICE at 1 Hz on core %d for release %llu @ msec=%6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
             
-        if(S3Cnt >= 60)
+        if(S3Cnt >= (2)*(10))
         {
             abortS3=TRUE;
             
@@ -177,5 +179,28 @@ void *Service_3_frame_storage(void *threadp)
     }
 
     pthread_exit((void *)0);
+}
+
+
+void *writeback_dump(void *threadp)
+{
+  printf("Writeback thread ran\n");
+  
+  unsigned long long WBCnt=0;
+  struct timespec current_time_val;
+  double current_realtime;
+  
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "WB thread @ sec=%6.9lf\n", current_realtime-start_realtime);
+  printf("WBthread @ sec=%6.9lf\n", current_realtime-start_realtime);
+  
+  while(!abortS1)
+  {
+    WBCnt++;
+    //syslog(LOG_CRIT, "WB thread on core %d for release %llu @ msec=%6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+  }
+
+  pthread_exit((void *)0);
+    
 }
 
