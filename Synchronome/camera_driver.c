@@ -31,10 +31,9 @@
 #define COLOR_CONVERT_RGB
 #define DUMP_FRAMES
 #define UNPROCESSED_FRAMES      (1)
-#define BUFF_LENGTH             (CAPTURE_FRAMES)
-
 #define DRIVER_MMAP_BUFFERS     (6)
 
+struct timespec frame_time;
 struct buffer 
 {
   void   *start;
@@ -55,9 +54,10 @@ struct v4l2_format fmt;
 int force_format=1;
 // always ignore first 8 frames 
 int framecnt = -START_UP_FRAMES;
+int g_framesize;
 
 unsigned char bigbuffer[(1280*960)];
-unsigned char negativebuffer[(1280*960)];
+//unsigned char negativebuffer[(1280*960)];
 
 
 /* transformation time capturing */
@@ -95,9 +95,10 @@ void uninit_device(void);
 void close_device(void);
 void print_analysis();
 
-static void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespec *time);
-static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
-static void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
+
+void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
+//static void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespec *time);
+void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
 void yuv2rgb_float(float y, float u, float v, unsigned char *r, unsigned char *g, unsigned char *b);
 void yuv2rgb(int y, int u, int v, unsigned char *r, unsigned char *g, unsigned char *b);
 void negative_transformation(unsigned char *colored_r, unsigned char *colored_g, unsigned char *colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b);
@@ -105,7 +106,6 @@ void negative_transformation(unsigned char *colored_r, unsigned char *colored_g,
 void mainloop(void)
 {
   unsigned int count;
-  printf("Code is running \n");
   count = frame_count;
   
   fd_set fds;
@@ -134,16 +134,17 @@ void mainloop(void)
     fprintf(stderr, "select timeout\n");
     exit(EXIT_FAILURE);
   }
+  
+  //start
             
   if(read_frame())
   {
-  
     //Some storing operation required.
-    if(framecnt > 1)
+    if(framecnt > -1)
     {	
       clock_gettime(CLOCK_MONOTONIC, &time_now);
       fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / NANOSEC_PER_SEC;
-      syslog(LOG_INFO, "read at %lf, @ %lf FPS\n", (fnow-fstart), (double)(framecnt+1) / (fnow-fstart));
+      syslog(LOG_INFO, "read_frame_read_at %lf, @ %lf FPS\n", (fnow-fstart), (double)(framecnt+1) / (fnow-fstart));
     }
     else 
     {
@@ -156,14 +157,14 @@ void mainloop(void)
   {
     printf("Read did not happen\n");
   }
+  //end
 
-  if(framecnt > 1)
+  if(framecnt > -1)
   {	
     clock_gettime(CLOCK_MONOTONIC, &time_stop);
     fstop = (double)time_stop.tv_sec + (double)time_stop.tv_nsec / NANOSEC_PER_SEC;
   }
 }
-
 
 
 int read_frame()
@@ -182,8 +183,8 @@ int read_frame()
           case EAGAIN:
             return 0;
           case EIO:
-            /* Could ignore EIO, see spec. */
-            /* fall through */
+          /* Could ignore EIO, see spec. */
+          /* fall through */
           default:
             errno_exit("read");
         }
@@ -204,7 +205,7 @@ int read_frame()
         clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
       }
       
-      if (-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
+      if(-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
       {
         switch (errno)
         {
@@ -226,8 +227,16 @@ int read_frame()
       {
         clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
         read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
-        //syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
+        syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
       }
+
+    
+      //circular buffer
+
+
+
+
+
 
       process_image(buffers[buf.index].start, buf.bytesused);
 
@@ -278,7 +287,7 @@ int read_frame()
 void process_image(const void *p, int size)
 {
   int i, newi/*, newsize=0*/;
-  struct timespec frame_time;
+
   int y_temp, y2_temp, u_temp, v_temp;
   unsigned char *pptr = (unsigned char *)p;
 
@@ -312,15 +321,9 @@ void process_image(const void *p, int size)
        
     // Pixels are YU and YV alternating, so YUYV which is 4 bytes
     // We want RGB, so RGBRGB which is 6 bytes
-    //
     if(framecnt > -1) 
     {
       clock_gettime(CLOCK_MONOTONIC, &ts_transform_start);
-    }
-
-    if(framecnt > -1) 
-    {
-      clock_gettime(CLOCK_MONOTONIC, &ts_end_to_end_start);
     }
 
     #if UNPROCESSED_FRAMES
@@ -349,34 +352,36 @@ void process_image(const void *p, int size)
     {
       clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
       transform_time[framecnt] = dTime(ts_transform_stop, ts_transform_start);
+      syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[framecnt]);
       
-      acq_to_tranform_time[framecnt] = dTime(ts_transform_stop, ts_read_capture_start);
+      
+      //acq_to_tranform_time[framecnt] = dTime(ts_transform_stop, ts_read_capture_start);
       //syslog(LOG_INFO, "acq_to_tranform_time individual is %lf\n", acq_to_tranform_time[framecnt]);
-      //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[framecnt]);
+    
     }
 
     if(framecnt > -1) 
     {
 
       #if UNPROCESSED_FRAMES
-      dump_ppm(bigbuffer, ((size*6)/4), framecnt, &frame_time);
+      
+      g_framesize = size;
+      //dump_ppm(bigbuffer, ((size*6)/4), framecnt, &frame_time);
       #else
-      dump_ppm_modified(negativebuffer, ((size*6)/4), framecnt, &frame_time);
+      //dump_ppm_modified(negativebuffer, ((size*6)/4), framecnt, &frame_time);
       #endif
 
 
-      clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
 
 
-      clock_gettime(CLOCK_MONOTONIC, &ts_end_to_end_stop);
-      end_to_end_time[framecnt] = dTime(ts_end_to_end_stop, ts_end_to_end_start);
+
+
+
       //syslog(LOG_INFO, "end_to_end_time individual is %lf\n", end_to_end_time[framecnt]);
 
 
 
-      clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
 
-      writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
       //syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
 
       //syslog(LOG_INFO, "Dump YUYV converted to RGB size %d\n", size);
@@ -897,106 +902,12 @@ void close_device(void)
 
 
 
-void print_analysis()
-{
-#if 1
-  /* read/capture time */
-  double sum = 0;
-  double avg_time = 0;
-  double temp_value = read_capture_time[0];
-  for(int i = 1; i<BUFF_LENGTH-1;i++ )
-  {
-    if(temp_value < read_capture_time[i])
-    {
-      temp_value = read_capture_time[i];
-    }
-    //printf("read_capture_time:: %lf\n",read_capture_time[i]);
-    sum = sum + read_capture_time[i];
-  }
-  avg_time = sum/CAPTURE_FRAMES;
-  
-  
-  syslog(LOG_INFO, "Total frames = %d frames, Average capture time = %lf msec, Average read_capture_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*1000, ((double)(1/avg_time)));
-  syslog(LOG_INFO, "WCET - read_capture_time %lf msec and %lf FPS\n",temp_value*1000, (1/temp_value));
-  /* transform time */
-  sum = 0;
-  avg_time = 0;
-  temp_value = transform_time[0];
-  for(int i = 1; i<BUFF_LENGTH;i++ )
-  {
-    if(temp_value < transform_time[i])
-    {
-      temp_value = transform_time[i];
-    }
-    //printf("transform_time:: %lf\n",transform_time[i]);
-    sum = sum + transform_time[i];
-  }
-  avg_time = sum/CAPTURE_FRAMES;
-  
-  syslog(LOG_INFO, "Total frames = %d frames, Average transform time = %lf msec, Average Transform Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*1000, ((double)(1/avg_time)));
-  syslog(LOG_INFO, "WCET - transform_time %lf msec and FPS is %lf FPS\n",temp_value*1000, (1/temp_value));
-  /* write-back time */
-  sum = 0;
-  avg_time = 0;
-  temp_value = writeback_time[0];
-  
-  for(int i = 1; i<BUFF_LENGTH;i++ )
-  {
-    if(temp_value < writeback_time[i])
-    {
-      temp_value = writeback_time[i];
-    }
-    //printf("writeback_time:: %lf\n",writeback_time[i]);
-    sum = sum + writeback_time[i];
-  }
-  avg_time = sum/CAPTURE_FRAMES;
-  
-  syslog(LOG_INFO, "Total frames = %d frames, Average writeback time = %lf msec, Average writeback Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*1000, ((double)(1/avg_time)));
-  syslog(LOG_INFO, "WCET - writeback_time %lf msec and FPS is %lf FPS\n",temp_value*1000, (1/temp_value));
-  
-  /* write-back time */
-  sum = 0;
-  avg_time = 0;
-  temp_value = end_to_end_time[0];
-  for(int i = 1; i<BUFF_LENGTH;i++ )
-  {
-    if(temp_value < end_to_end_time[i])
-    {
-      temp_value = end_to_end_time[i];
-    }
-    //printf("writeback_time:: %lf\n",writeback_time[i]);
-    sum = sum + end_to_end_time[i];
-  }
-  avg_time = sum/CAPTURE_FRAMES;
-  
-  //syslog(LOG_INFO, "Total frames = %d frames, Average end_to_end_time time = %lf msec, Average end_to_end_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*1000, ((double)(1/avg_time)));
-  //syslog(LOG_INFO, "WCET - end_to_end_time %lf amsec nd FPS is %lf FPS\n",temp_value*1000, (1/temp_value));
-  
-  sum = 0;
-  avg_time = 0;
-  temp_value = acq_to_tranform_time[0];
-  for(int i = 1; i<BUFF_LENGTH;i++ )
-  {
-    if(temp_value < acq_to_tranform_time[i])
-    {
-      temp_value = acq_to_tranform_time[i];
-    }
-    //printf("writeback_time:: %lf\n",writeback_time[i]);
-    sum = sum + acq_to_tranform_time[i];
-  }
-  avg_time = sum/CAPTURE_FRAMES;
-  
-  //syslog(LOG_INFO, "Total frames = %d frames, Average acq_to_tranform_time time = %lf msec, Average acq_to_tranform_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*1000, ((double)(1/avg_time)));
-  //syslog(LOG_INFO, "WCET - acq_to_tranform_time %lf msec and FPS is %lf FPS\n",temp_value*1000, (1/temp_value));
-  
-  #endif
-}
 
-
+#if 0
 char ppm_header_modified[]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
 char ppm_dumpname_modified[]="frames/nega0000.ppm";
 
-static void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespec *time)
+void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespec *time)
 {
   int written, total, dumpfd;
 
@@ -1030,11 +941,11 @@ static void dump_ppm_modified(const void *p, int size, unsigned int tag, struct 
   close(dumpfd);
     
 }
-
+#endif
 char ppm_header[]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
 char ppm_dumpname[]="frames/orig0000.ppm";
 
-static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
+void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
   int written, total, dumpfd;
 
@@ -1063,7 +974,7 @@ static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
 
   clock_gettime(CLOCK_MONOTONIC, &time_now);
   fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / NANOSEC_PER_SEC;
-  //syslog(LOG_INFO, "Frame written to flash at %lf, %d, bytes\n", (fnow-fstart), total);
+  syslog(LOG_INFO, "Frame_written_to_flash at %lf, %d, bytes\n", (fnow-fstart), total);
 
   close(dumpfd);
     
@@ -1074,7 +985,7 @@ static void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
 char pgm_header[]="P5\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
 char pgm_dumpname[]="frames/test0000.pgm";
 
-static void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
+void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
   int written, total, dumpfd;
 
@@ -1176,3 +1087,106 @@ void negative_transformation(unsigned char *colored_r, unsigned char *colored_g,
   *negative_g = SAT - *colored_g;
   *negative_b = SAT - *colored_b;
 }
+
+
+void print_analysis()
+{
+
+  /* read/capture time */
+  double sum = 0;
+  double avg_time = 0;
+  double temp_value = read_capture_time[0];
+  for(int i = 1; i<BUFF_LENGTH-1;i++ )
+  {
+    if(temp_value < read_capture_time[i])
+    {
+      temp_value = read_capture_time[i];
+    }
+    //printf("read_capture_time:: %lf\n",read_capture_time[i]);
+    sum = sum + read_capture_time[i];
+  }
+  avg_time = sum/CAPTURE_FRAMES;
+
+  syslog(LOG_INFO, "Total frames = %d frames, Average capture time = %lf msec, Average read_capture_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*MSEC_PER_SEC, ((double)(1/avg_time)));
+  syslog(LOG_INFO, "WCET - read_capture_time %lf msec and %lf FPS\n",temp_value*MSEC_PER_SEC, (1/temp_value));
+  
+  /* transform time */
+  sum = 0;
+  avg_time = 0;
+  temp_value = transform_time[0];
+  for(int i = 1; i<BUFF_LENGTH;i++ )
+  {
+    if(temp_value < transform_time[i])
+    {
+      temp_value = transform_time[i];
+    }
+    //printf("transform_time:: %lf\n",transform_time[i]);
+    sum = sum + transform_time[i];
+  }
+  avg_time = sum/CAPTURE_FRAMES;
+  
+  syslog(LOG_INFO, "Total frames = %d frames, Average transform time = %lf msec, Average Transform Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*MSEC_PER_SEC, ((double)(1/avg_time)));
+  syslog(LOG_INFO, "WCET - transform_time %lf msec and FPS is %lf FPS\n",temp_value*MSEC_PER_SEC, (1/temp_value));
+  
+  /* write-back time */
+  sum = 0;
+  avg_time = 0;
+  temp_value = writeback_time[0];
+  
+  for(int i = 1; i<BUFF_LENGTH;i++ )
+  {
+    if(temp_value < writeback_time[i])
+    {
+      temp_value = writeback_time[i];
+    }
+    //printf("writeback_time:: %lf\n",writeback_time[i]);
+    sum = sum + writeback_time[i];
+  }
+  avg_time = sum/CAPTURE_FRAMES;
+  
+  syslog(LOG_INFO, "Total frames = %d frames, Average writeback time = %lf msec, Average writeback Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*MSEC_PER_SEC, ((double)(1/avg_time)));
+  syslog(LOG_INFO, "WCET - writeback_time %lf msec and FPS is %lf FPS\n",temp_value*MSEC_PER_SEC, (1/temp_value));
+  
+  /* write-back time */
+  sum = 0;
+  avg_time = 0;
+  temp_value = end_to_end_time[0];
+  for(int i = 1; i<BUFF_LENGTH;i++ )
+  {
+    if(temp_value < end_to_end_time[i])
+    {
+      temp_value = end_to_end_time[i];
+    }
+    //printf("end_to_end_time:: %lf\n",end_to_end_time[i]);
+    sum = sum + end_to_end_time[i];
+  }
+  avg_time = sum/CAPTURE_FRAMES;
+  
+  syslog(LOG_INFO, "Total frames = %d frames, Average end_to_end_time time = %lf msec, Average end_to_end_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*MSEC_PER_SEC, ((double)(1/avg_time)));
+  syslog(LOG_INFO, "WCET - end_to_end_time %lf amsec nd FPS is %lf FPS\n",temp_value*MSEC_PER_SEC, (1/temp_value));
+  
+  #if 0
+  sum = 0;
+  avg_time = 0;
+  temp_value = acq_to_tranform_time[0];
+  for(int i = 1; i<BUFF_LENGTH;i++ )
+  {
+    if(temp_value < acq_to_tranform_time[i])
+    {
+      temp_value = acq_to_tranform_time[i];
+    }
+    //printf("writeback_time:: %lf\n",writeback_time[i]);
+    sum = sum + acq_to_tranform_time[i];
+  }
+  avg_time = sum/CAPTURE_FRAMES;
+  
+  syslog(LOG_INFO, "Total frames = %d frames, Average acq_to_tranform_time time = %lf msec, Average acq_to_tranform_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*MSEC_PER_SEC, ((double)(1/avg_time)));
+  syslog(LOG_INFO, "WCET - acq_to_tranform_time %lf msec and FPS is %lf FPS\n",temp_value*MSEC_PER_SEC, (1/temp_value));
+  #endif
+  
+  
+  
+
+}
+
+

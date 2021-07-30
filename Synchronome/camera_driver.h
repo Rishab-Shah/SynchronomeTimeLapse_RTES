@@ -20,6 +20,9 @@
 #include <signal.h>
 
 
+
+#include "time_spec.h"
+
 enum io_method 
 {
   IO_METHOD_READ,
@@ -27,10 +30,12 @@ enum io_method
   IO_METHOD_USERPTR,
 };
 
-#define START_UP_FRAMES         (8)
+#define START_UP_FRAMES         (15)
 #define LAST_FRAMES             (1)
-#define CAPTURE_FRAMES          (300+LAST_FRAMES)
+#define CAPTURE_FRAMES          (180+LAST_FRAMES)
 #define FRAMES_TO_ACQUIRE       (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
+#define BUFF_LENGTH             (CAPTURE_FRAMES)
+
 
 void errno_exit(const char *s);
 

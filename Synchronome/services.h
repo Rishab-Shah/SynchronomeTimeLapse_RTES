@@ -20,9 +20,16 @@
 #include <signal.h>
 
 #include "time_spec.h"
+#include "camera_driver.h"
 
-#define TRUE                (1)
-#define FALSE               (0)
+#define TRUE                  (1)
+#define FALSE                 (0)
+
+#define SNDRCV_MQ	            ("/send_receive_mq_image")
+#define SNDRCV_MQ_2           ("/send_receive_mq_image_2")
+
+#define MAX_MSG_SIZE	        (100)
+#define ERROR		              (-1)
 
 void *Service_1_frame_acquisition(void *threadp);
 void *Service_2_frame_process(void *threadp);

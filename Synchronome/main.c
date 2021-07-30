@@ -24,15 +24,28 @@
 #include "services.h"
 
 
-#define NUM_CPU_CORES       (4)
-#define TRUE                (1)
-#define FALSE               (0)
-#define RT_CORE             (2)
-#define NUM_THREADS         (3)
+#define NUM_CPU_CORES          (4)
+#define TRUE                   (1)
+#define FALSE                  (0)
+#define RT_CORE                (2)
+#define NUM_THREADS            (3)
+                              
+#define CAMERA_1               (1)
+#define WRITEBACK_CORE         (3)
 
-#define CAMERA_1            (1)
-#define WRITEBACK_CORE      (3)
 
+// MQ - START
+
+extern char imagebuff[4096];
+extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
+
+void *buffptr;
+extern unsigned char bigbuffer[(1280*960)];
+
+extern void message_queue_setup();
+extern void message_queue_release();
+
+// MQ - END
 
 static CB_t cbfifo_tx;
 struct timespec start_time_val;
@@ -56,6 +69,7 @@ void set_sequencer_timer_interval();
 void print_scheduler(void);
 extern void v4l2_frame_acquisition_initialization();
 extern void v4l2_frame_acquisition_shutdown();
+void init_variables();
 //// time stmap varibales
 
 extern double fnow, fstart, fstop, fnow_negative;
@@ -66,15 +80,10 @@ extern struct timespec time_now, time_start, time_stop,time_now_negative;
 /* transformation time capturing */
 extern struct timespec ts_transform_start,ts_transform_stop;
 extern double transform_time[BUFF_LENGTH];
-/* writeback time capturing */
-extern struct timespec ts_writeback_start,ts_writeback_stop;
-extern double writeback_time[BUFF_LENGTH];
 /* read frame from camera time capturing */
 extern struct timespec ts_read_capture_start,ts_read_capture_stop;
 extern double read_capture_time[BUFF_LENGTH+1];
-/* end to end time */
-extern struct timespec ts_end_to_end_start,ts_end_to_end_stop;
-extern double end_to_end_time[BUFF_LENGTH];
+
 extern double acq_to_tranform_time[BUFF_LENGTH];
 #endif
 
@@ -188,10 +197,14 @@ int main(int argc, char **argv)
 
   init_variables();
 
+  //printf("buffer =\n%s", imagebuff);
+  
+  message_queue_setup();
+  
   struct timespec current_time_val, current_time_res;
   double current_realtime, current_realtime_res;
 
-  int i, rc, scope;
+  int i,rc, scope;
 
   cpu_set_t threadcpu;
   cpu_set_t allcpuset;
@@ -199,8 +212,7 @@ int main(int argc, char **argv)
   pthread_t threads[NUM_THREADS];
   threadParams_t threadParams[NUM_THREADS];
   pthread_attr_t rt_sched_attr[NUM_THREADS];
-  
-  
+
   int rt_max_prio, rt_min_prio, cpuidx;
   
   struct sched_param rt_param[NUM_THREADS];
@@ -371,6 +383,11 @@ int main(int argc, char **argv)
   fprintf(stderr, "\n");
 #endif
 
+  message_queue_release();
+  
+  free(buffptr);
+  printf("heap space memory freed\n");
+  
   printf("\nCAMERA_TEST COMPLETE\n");
   
   return 0;
@@ -395,13 +412,16 @@ void print_scheduler(void)
       printf("Pthread Policy is SCHED_FIFO\n");
       break;
     case SCHED_OTHER:
-      printf("Pthread Policy is SCHED_OTHER\n"); exit(-1);
+      printf("Pthread Policy is SCHED_OTHER\n");
+      exit(-1);
       break;
     case SCHED_RR:
-      printf("Pthread Policy is SCHED_RR\n"); exit(-1);
+      printf("Pthread Policy is SCHED_RR\n");
+      exit(-1);
       break;
     default:
-      printf("Pthread Policy is UNKNOWN\n"); exit(-1);
+      printf("Pthread Policy is UNKNOWN\n");
+      exit(-1);
   }
 }
 
@@ -429,5 +449,8 @@ void init_variables()
   seqCnt = 0;
   
   /* Initialize both the separate tx and rx queues */
-  //cbfifo_init(&cbfifo_tx,CBFIFO_SIZE);
+  cbfifo_init(&cbfifo_tx,CBFIFO_SIZE);
+  buffptr = (void *)malloc(sizeof(bigbuffer));
 }
+
+
