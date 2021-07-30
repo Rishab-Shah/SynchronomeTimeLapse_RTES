@@ -10,7 +10,7 @@ struct mq_attr mq_attr2;
 mqd_t mymq2;
 
 int sid,rid;
-//char imagebuff[4096];
+
 extern int framecnt;
 extern struct timespec frame_time;
 extern int g_framesize;
@@ -75,10 +75,11 @@ void Sequencer(int id)
   // Release each service at a sub-rate of the generic sequencer rate
 
   // Service_1 @ 30 Hz = 33.33msec
-  if((seqCnt % 30) == 0) sem_post(&semS1); //1sec
+  if((seqCnt % 30) == 0) sem_post(&semS1); //1sec - > acquisitoin rate 0. (3Hz to 20 Hz for diff logic)
 
   // Service_2 @ 10 Hz = 100 msec
-  if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec - to cause interruption to acq together sometime and sometimes not
+  //if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec - to cause interruption to acq together sometime and sometimes not
+  if((seqCnt % 90) == 0) sem_post(&semS2);   //3 sec - read all the messages (for 3 parts)
 
   // Service_3 @ 1 Hz = 1 second
   if((seqCnt % 60) == 0) sem_post(&semS3); //2sec - to cause interruption to acq together sometime and sometimes not
@@ -129,7 +130,7 @@ void *Service_1_frame_acquisition(void *threadp)
     //memset(imagebuff, 0, sizeof(imagebuff));
     //sprintf(imagebuff, "%d", S1Cnt);
     
-    strcpy(buffptr, (char*)bigbuffer);
+    memcpy(buffptr, bigbuffer,sizeof(bigbuffer));
     
     //printf("Message to send = %s\n", (char *)buffptr);
     //printf("Sending %ld bytes\n", sizeof(buffptr));
@@ -152,7 +153,7 @@ void *Service_1_frame_acquisition(void *threadp)
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
     
     /* 3 minutes +  15 frames for start up */
-    if(S1Cnt >= (  (((60)*(3)) +  15))  )
+    if(S1Cnt >= (  (((60)*(1)) +  15))  )
     {
       abortS1=TRUE;
       abortTest = TRUE;
@@ -296,7 +297,7 @@ void *writeback_dump(void *threadp)
       
         clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
     
-        dump_ppm(bigbuffer, ((g_framesize*6)/4), framecnt, &frame_time);
+        dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
     
         clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
         writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);

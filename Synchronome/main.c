@@ -33,6 +33,7 @@
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
+int cpu_core[NUM_THREADS] = {1,2,2};
 
 // MQ - START
 
@@ -272,11 +273,12 @@ int main(int argc, char **argv)
   printf("rt_max_prio=%d\n", rt_max_prio);
   printf("rt_min_prio=%d\n", rt_min_prio);
 
-  for(i=0; i < NUM_THREADS; i++)
+  for(i = 0; i < NUM_THREADS; i++)
   {
     // run ALL threads on core RT_CORE
     CPU_ZERO(&threadcpu);
-    cpuidx=(RT_CORE);
+    //cpuidx=(RT_CORE);
+    cpuidx = cpu_core[i];
     CPU_SET(cpuidx, &threadcpu);
 
     rc=pthread_attr_init(&rt_sched_attr[i]);
