@@ -48,6 +48,8 @@ extern double end_to_end_time[BUFF_LENGTH];
 //
 
 
+int save_image(int *frame_stored);
+
 void Sequencer(int id)
 {
   //struct timespec current_time_val;
@@ -72,9 +74,9 @@ void Sequencer(int id)
   }
          
   seqCnt++;
+  
   // Release each service at a sub-rate of the generic sequencer rate
-
-  // Service_1 @ 30 Hz = 33.33msec
+  //Service_1 @ 30 Hz = 33.33msec
   if((seqCnt % 30) == 0) sem_post(&semS1); //1sec - > acquisitoin rate 0. (3Hz to 20 Hz for diff logic)
 
   // Service_2 @ 10 Hz = 100 msec
@@ -152,7 +154,7 @@ void *Service_1_frame_acquisition(void *threadp)
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
     
-    /* 3 minutes +  15 frames for start up */
+    /* 1 minutes +  15 frames for start up */
     if(S1Cnt >= (  (((60)*(1)) +  15))  )
     {
       abortS1=TRUE;
@@ -256,18 +258,14 @@ void *Service_3_frame_storage(void *threadp)
 
 void *writeback_dump(void *threadp)
 {
-  char buffer[sizeof(void *)+sizeof(int)];
-  void *buffptr; 
-  unsigned int prio;
-  int nbytes;
-  //int count = 0;
-  int id;
-  
   printf("Writeback thread ran\n");
   
+  int return_val = 0;
   unsigned long long WBCnt=0;
   struct timespec current_time_val;
   double current_realtime;
+  int abort_wb = FALSE;
+  int frames_stored = 0;
   
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "WB thread @ sec=%6.9lf\n", current_realtime-start_realtime);
@@ -276,38 +274,23 @@ void *writeback_dump(void *threadp)
   /* receive logic */    
   mymq = mq_open(SNDRCV_MQ , O_CREAT|O_RDWR, S_IRWXU, &mq_attr);
   
-  while(!abortS1)
+  while(!abort_wb)
   {
-    WBCnt++;
-      
-    if((nbytes = mq_receive(mymq, buffer, (size_t)((sizeof(void *)+sizeof(int))), &prio)) == ERROR)
+    WBCnt++; 
+    return_val = save_image(&frames_stored);
+    
+    if(return_val == 1)
     {
-      perror("mq_receive 1\n");
+      clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+      syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)*MSEC_PER_SEC); 
     }
-    else
+    
+    if(frames_stored == 60)
     {
-      memcpy(&buffptr, buffer, (sizeof(void *)));
-      memcpy((void *)&id, &(buffer[sizeof(void *)]), (sizeof(int)));
-      
-      //printf("receive: ptr msg 0x%p received with priority = %d, length = %d, id = %d\n", buffptr, prio, nbytes, id);
-      //syslog(LOG_CRIT, "Service 2::Messages received = %s\n", (char *)buffptr);
-      
-      if(framecnt > -1)
-      {
-      
-        clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
-    
-        dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
-    
-        clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-        writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
-        
-        syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
-        
-        syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)*MSEC_PER_SEC); 
-      }   
+      abort_wb = TRUE;
     }
   }
+  
   pthread_exit((void *)0); 
 }
 
@@ -358,3 +341,47 @@ void message_queue_release()
   mq_unlink(SNDRCV_MQ_2);
 
 }
+
+int save_image(int *frame_stored)
+{
+  char buffer[sizeof(void *)+sizeof(int)];
+  void *buffptr; 
+  unsigned int prio;
+  int nbytes;
+  //int count = 0;
+  int id;
+  int return_val =0;
+
+  if((nbytes = mq_receive(mymq, buffer, (size_t)((sizeof(void *)+sizeof(int))), &prio)) == ERROR)
+  {
+    perror("mq_receive 1\n");
+    return return_val;
+  }
+  else
+  {
+    memcpy(&buffptr, buffer, (sizeof(void *)));
+    memcpy((void *)&id, &(buffer[sizeof(void *)]), (sizeof(int)));
+    
+    //printf("receive: ptr msg 0x%p received with priority = %d, length = %d, id = %d\n", buffptr, prio, nbytes, id);
+    //syslog(LOG_CRIT, "Service 2::Messages received = %s\n", (char *)buffptr);
+    
+    if(framecnt > -1)
+    {
+    
+      clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
+      
+      dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
+      
+      clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
+      writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
+      
+      syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
+      
+      return_val = 1;
+      *frame_stored = framecnt;
+      return return_val;
+    }   
+  }
+  return return_val;
+}
+
