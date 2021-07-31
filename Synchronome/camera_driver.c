@@ -936,13 +936,14 @@ void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespe
 }
 #endif
 
-char ppm_header[300]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
-char ppm_dumpname[25]="frames/orig0000.ppm";
+char ppm_header[137]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
+char ppm_dumpname[21]="frames/orig0000.ppm";
 
 void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
   int written, total, dumpfd;
-
+  
+  
   printf("stringlenght is %d\n",strlen(ppm_uname_string));
   /* 11th number is a test number. 4 digit number is updated here. */
   snprintf(ppm_dumpname+11, 9, "%04d", tag);
@@ -950,13 +951,24 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
   strncat(ppm_dumpname+15, ".ppm", 5);
 
   dumpfd = open(ppm_dumpname, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
-
+  
+  #if 0
   snprintf(ppm_header+4, 11, "%010d", (int)time->tv_sec);
   strcat(ppm_header+14, " sec ");
   snprintf(ppm_header+19, 11, "%010d", (int)((time->tv_nsec)/1000000));
   strcat(ppm_header+29, " msec ");
   strncat(ppm_header+35, ppm_uname_string, strlen(ppm_uname_string));
   strcat(ppm_header+122, ""HRES_STR" "VRES_STR"\n255\n");
+  #else
+  snprintf(ppm_header+4, 11, "%010d", (int)time->tv_sec);
+  strcat(ppm_header+14, " sec ");
+  snprintf(ppm_header+19, 11, "%010d", (int)((time->tv_nsec)/1000000));
+  strcat(ppm_header+29, " msec \n");
+  strcat(ppm_header+36, ppm_uname_string);
+  strcat(ppm_header+122, ""HRES_STR" "VRES_STR"\n255\n");
+  printf("length is %d\n",strlen(ppm_header));
+  #endif
+  
 
   // subtract 1 from sizeof header because it includes the null terminator for the string
   written=write(dumpfd, ppm_header, sizeof(ppm_header)-1);

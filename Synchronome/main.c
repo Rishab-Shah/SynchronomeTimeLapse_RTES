@@ -463,18 +463,21 @@ void get_linux_details()
   int status;
   char path[PATH_MAX];
   
-  fp = popen("uname -a", "r");
+  strcpy(path,"");
+  strcpy(ppm_uname_string,"");
+  
+  fp = popen("uname -a","r");
   if (fp == NULL)
       /* Handle error */;
   
   while(fgets(path, PATH_MAX, fp) != NULL)
       printf("%s", path);
   
-  strcpy(ppm_uname_string,"");
-  strcat(ppm_uname_string,"#");
+  strcpy(ppm_uname_string,"#");
   strncat(ppm_uname_string,path,strlen(path));
-  
+  //strncpy(ppm_uname_string,path,strlen(path));  
   status = pclose(fp);
+  
   if (status == -1)
   {
       /* Error reported by pclose() */
