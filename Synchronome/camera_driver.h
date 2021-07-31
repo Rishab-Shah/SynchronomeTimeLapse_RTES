@@ -36,7 +36,7 @@ enum io_method
 #define CAPTURE_FRAMES          (WRITEBACK_FRAMES+LAST_FRAMES)
 #define FRAMES_TO_ACQUIRE       (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
 #define BUFF_LENGTH             (CAPTURE_FRAMES)
-  
+#define COLOR_CONVERT_RGB       (1)
 
 void errno_exit(const char *s);
 

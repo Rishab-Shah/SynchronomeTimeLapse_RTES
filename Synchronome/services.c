@@ -370,9 +370,11 @@ int save_image(int *frame_stored)
     
       clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
       
-      //dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
-      dump_pgm(bigbuffer, (g_framesize/2), framecnt, &frame_time);
-      
+      #if COLOR_CONVERT_RGB
+      dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
+      #else
+      dump_pgm(buffptr, (g_framesize/2), framecnt, &frame_time);
+      #endif
       clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
       writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
       

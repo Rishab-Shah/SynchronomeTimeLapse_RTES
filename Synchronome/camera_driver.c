@@ -28,7 +28,7 @@
 
 #define CLEAR(x)               memset(&(x), 0, sizeof(x))
 
-//#define COLOR_CONVERT_RGB
+
 #define DUMP_FRAMES
 #define UNPROCESSED_FRAMES      (1)
 #define DRIVER_MMAP_BUFFERS     (6)
@@ -328,7 +328,7 @@ void process_image(const void *p, int size)
   else if(fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
   {
 
-    #if defined(COLOR_CONVERT_RGB)
+    #if COLOR_CONVERT_RGB
        
     // Pixels are YU and YV alternating, so YUYV which is 4 bytes
     // We want RGB, so RGBRGB which is 6 bytes
