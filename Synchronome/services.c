@@ -70,7 +70,6 @@ void Sequencer(int id)
     // shutdown all services
     abortS1=TRUE; abortS2=TRUE; abortS3=TRUE;
     sem_post(&semS1); sem_post(&semS2); sem_post(&semS3);
-
   }
          
   seqCnt++;
@@ -155,7 +154,7 @@ void *Service_1_frame_acquisition(void *threadp)
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
     
     /* 1 minutes +  15 frames for start up */
-    if(S1Cnt >= (  (((60)*(1)) +  15))  )
+    if(S1Cnt >= (  (((60)*(1)) +  5))  )
     {
       abortS1=TRUE;
       abortTest = TRUE;

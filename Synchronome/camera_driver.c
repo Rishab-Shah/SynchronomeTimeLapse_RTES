@@ -106,7 +106,7 @@ void send_image_to_yuyv_rgbrgb(const void *p, int size);
 
 
 //
-
+extern char ppm_uname_string[90];
 void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
 //static void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespec *time);
 void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
@@ -220,8 +220,8 @@ int read_frame()
         syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
       }
 
-      printf("buffers[buf.index].start = %p\n",buffers[buf.index].start);
-      printf("buf.bytesused = %d\n",buf.bytesused);
+      //printf("buffers[buf.index].start = %p\n",buffers[buf.index].start);
+      //printf("buf.bytesused = %d\n",buf.bytesused);
       
       process_image(buffers[buf.index].start, buf.bytesused);
       
@@ -936,24 +936,27 @@ void dump_ppm_modified(const void *p, int size, unsigned int tag, struct timespe
 }
 #endif
 
-char ppm_header[]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
-char ppm_dumpname[]="frames/orig0000.ppm";
+char ppm_header[300]="P6\n#9999999999 sec 9999999999 msec \n"HRES_STR" "VRES_STR"\n255\n";
+char ppm_dumpname[25]="frames/orig0000.ppm";
 
 void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
 {
   int written, total, dumpfd;
 
+  printf("stringlenght is %d\n",strlen(ppm_uname_string));
   /* 11th number is a test number. 4 digit number is updated here. */
-  snprintf(&ppm_dumpname[11], 9, "%04d", tag);
+  snprintf(ppm_dumpname+11, 9, "%04d", tag);
   /* PPM is appended in the file name */
-  strncat(&ppm_dumpname[15], ".ppm", 5);
+  strncat(ppm_dumpname+15, ".ppm", 5);
 
   dumpfd = open(ppm_dumpname, O_WRONLY | O_NONBLOCK | O_CREAT, 00666);
 
-  snprintf(&ppm_header[4], 11, "%010d", (int)time->tv_sec);
-  strncat(&ppm_header[14], " sec ", 5);
-  snprintf(&ppm_header[19], 11, "%010d", (int)((time->tv_nsec)/1000000));
-  strncat(&ppm_header[29], " msec \n"HRES_STR" "VRES_STR"\n255\n", 19);
+  snprintf(ppm_header+4, 11, "%010d", (int)time->tv_sec);
+  strcat(ppm_header+14, " sec ");
+  snprintf(ppm_header+19, 11, "%010d", (int)((time->tv_nsec)/1000000));
+  strcat(ppm_header+29, " msec ");
+  strncat(ppm_header+35, ppm_uname_string, strlen(ppm_uname_string));
+  strcat(ppm_header+122, ""HRES_STR" "VRES_STR"\n255\n");
 
   // subtract 1 from sizeof header because it includes the null terminator for the string
   written=write(dumpfd, ppm_header, sizeof(ppm_header)-1);
@@ -1176,9 +1179,6 @@ void print_analysis()
   syslog(LOG_INFO, "Total frames = %d frames, Average acq_to_tranform_time time = %lf msec, Average acq_to_tranform_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time*MSEC_PER_SEC, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - acq_to_tranform_time %lf msec and FPS is %lf FPS\n",temp_value*MSEC_PER_SEC, (1/temp_value));
   #endif
-  
-  
-  
 
 }
 

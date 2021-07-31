@@ -45,7 +45,7 @@ extern unsigned char bigbuffer[(1280*960)];
 
 extern void message_queue_setup();
 extern void message_queue_release();
-
+void get_linux_details();
 // MQ - END
 
 static CB_t cbfifo_tx;
@@ -89,7 +89,6 @@ extern double acq_to_tranform_time[BUFF_LENGTH];
 #endif
 
 extern void print_analysis();
-
 ////
 
 ///CAMERA//
@@ -104,7 +103,7 @@ static int force_format = 1;
 //static enum io_method   io = IO_METHOD_USERPTR;
 //static enum io_method   io = IO_METHOD_READ;
 extern enum io_method io;
-
+char ppm_uname_string[100];
 
 static void usage(FILE *fp, int argc, char **argv)
 {
@@ -453,6 +452,38 @@ void init_variables()
   /* Initialize both the separate tx and rx queues */
   cbfifo_init(&cbfifo_tx,CBFIFO_SIZE);
   buffptr = (void *)malloc(sizeof(bigbuffer));
+  
+  get_linux_details();
 }
 
+#define PATH_MAX   100
+void get_linux_details()
+{
+  FILE *fp;
+  int status;
+  char path[PATH_MAX];
+  
+  fp = popen("uname -a", "r");
+  if (fp == NULL)
+      /* Handle error */;
+  
+  while(fgets(path, PATH_MAX, fp) != NULL)
+      printf("%s", path);
+  
+  strcpy(ppm_uname_string,"");
+  strcat(ppm_uname_string,"#");
+  strncat(ppm_uname_string,path,strlen(path));
+  
+  status = pclose(fp);
+  if (status == -1)
+  {
+      /* Error reported by pclose() */
 
+  }
+  else
+  {
+      /* Use macros described under wait() to inspect `status' in order
+         to determine success/failure of command executed by popen() */
+
+  }
+}
