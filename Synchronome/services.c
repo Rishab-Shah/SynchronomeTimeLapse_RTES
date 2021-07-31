@@ -18,7 +18,7 @@ extern int g_framesize;
 void message_queue_setup();
 void message_queue_release();
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
-
+extern void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
 extern char ppm_header[];
 extern char ppm_dumpname[];
 
@@ -154,7 +154,8 @@ void *Service_1_frame_acquisition(void *threadp)
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
     
     /* 1 minutes +  15 frames for start up */
-    if(S1Cnt >= (  (((60)*(1)) +  5))  )
+    if(S1Cnt >= (WRITEBACK_FRAMES+START_UP_FRAMES) )
+    //if(S1Cnt >= (  (((60)*(1)) +  5))  )
     {
       abortS1=TRUE;
       abortTest = TRUE;
@@ -284,7 +285,7 @@ void *writeback_dump(void *threadp)
       syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)*MSEC_PER_SEC); 
     }
     
-    if(frames_stored == 60)
+    if(frames_stored == WRITEBACK_FRAMES)
     {
       abort_wb = TRUE;
     }
@@ -369,7 +370,8 @@ int save_image(int *frame_stored)
     
       clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
       
-      dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
+      //dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
+      dump_pgm(bigbuffer, (g_framesize/2), framecnt, &frame_time);
       
       clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
       writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
