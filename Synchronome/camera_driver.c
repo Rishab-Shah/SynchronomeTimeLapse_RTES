@@ -26,7 +26,7 @@
 #define VRES_STR                "480"
 
 
-#define CLEAR(x)               memset(&(x), 0, sizeof(x))
+#define CLEAR(x)                 memset(&(x), 0, sizeof(x))
 
 
 #define DUMP_FRAMES
@@ -40,6 +40,8 @@ struct buffer
   size_t  length;
 };
 
+
+//extern unsigned char transfer_buffer[10][(1280*960)];
 double fnow=0.0, fstart=0.0, fstop=0.0, fnow_negative = 0.0;
 
 struct timespec time_now, time_start, time_stop,time_now_negative;
@@ -117,9 +119,6 @@ void negative_transformation(unsigned char *colored_r, unsigned char *colored_g,
 void mainloop(void)
 {
 // counti s not used as of now anywhere
-  unsigned int count;
-  count = frame_count;
-  
   fd_set fds;
   struct timeval tv;
   int rc;
@@ -165,8 +164,7 @@ void mainloop(void)
     {
       syslog(LOG_INFO, "at %lf\n", fnow);
     }
-  
-    count--;
+
   }
   else
   {
@@ -220,9 +218,9 @@ int read_frame()
         syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
       }
 
-      //printf("buffers[buf.index].start = %p\n",buffers[buf.index].start);
-      //printf("buf.bytesused = %d\n",buf.bytesused);
-      
+//      printf("buf.bytesused = %d\n",buf.bytesused);
+  //    printf("buffers[buf.index].start = %p\n",buffers[buf.index].start);
+    //  printf("buf.index = %d\n",buf.index);
       
       //need to store here
       process_image(buffers[buf.index].start, buf.bytesused);
@@ -347,6 +345,9 @@ void process_image(const void *p, int size)
       //negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
       //negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
     }
+    
+   // memcpy(transfer_buffer[0][0],bigbuffer,sizeof(bigbuffer));
+    
     #else
     for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
     {
@@ -443,9 +444,7 @@ void process_image(const void *p, int size)
   {
     //syslog(LOG_INFO, "ERROR - unknown dump format\n");
   }
-
 #endif
-
 }
 
 

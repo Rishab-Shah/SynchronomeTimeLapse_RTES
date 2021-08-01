@@ -33,8 +33,8 @@
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
-int cpu_core[NUM_THREADS] = {1,2,2};
-
+int cpu_core[NUM_THREADS] = {1,1,2};
+//unsigned char transfer_buffer[10][(1280*960)] = {0};
 // MQ - START
 
 extern char imagebuff[4096];
@@ -48,7 +48,7 @@ extern void message_queue_release();
 void get_linux_details();
 // MQ - END
 
-static CB_t cbfifo_tx;
+//static CB_t cbfifo_tx;
 struct timespec start_time_val;
 
 extern int abortTest;
@@ -196,8 +196,6 @@ int main(int argc, char **argv)
   }
 
   init_variables();
-
-  //printf("buffer =\n%s", imagebuff);
   
   message_queue_setup();
   
@@ -341,6 +339,8 @@ int main(int argc, char **argv)
   writeback_threadparam.threadIdx = 5;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
+
+  
   // Wait for service threads to initialize and await relese by sequencer.
   //
   // Note that the sleep is not necessary of RT service threads are created with 
@@ -352,6 +352,13 @@ int main(int argc, char **argv)
   // Create Sequencer thread, which like a cyclic executive, is highest prio
 
   // Sequencer = RT_MAX	@ 100 Hz
+  
+  char c;
+  printf("Shotgun mode\n");
+  c = getchar();
+  printf("executed\n");
+  putchar(c);
+  
   set_sequencer_timer_interval();
   
   for(i=0;i<NUM_THREADS;i++)
@@ -449,11 +456,10 @@ void init_variables()
   abortS1=FALSE; abortS2=FALSE; abortS3=FALSE;
   seqCnt = 0;
   
-  /* Initialize both the separate tx and rx queues */
-  cbfifo_init(&cbfifo_tx,CBFIFO_SIZE);
   buffptr = (void *)malloc(sizeof(bigbuffer));
   
   get_linux_details();
+  
 }
 
 #define PATH_MAX   100
