@@ -1,26 +1,38 @@
 #include "services.h"
 
+extern void *tempptr;
+extern unsigned char temp_g_buffer[614400];
 
 extern void *buffptr;
 extern unsigned char bigbuffer[(1280*960)];
 
+extern void *buffptr_transform;
+extern unsigned char negativebuffer[(1280*960)];
+
 struct mq_attr mq_attr;
 mqd_t mymq;
+
 struct mq_attr mq_attr2;
 mqd_t mymq2;
 
+struct mq_attr mq_attr3;
+mqd_t mymq3;
+
 int sid,rid;
+
+void message_queue_setup();
+void message_queue_release();
+
+extern void process_transform(const void *p, int size);
+extern void process_image(const void *p, int size);
+int process_transform_servicepart(int *frame_stored);
+
+extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
+extern void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
 
 extern int framecnt;
 extern struct timespec frame_time;
 extern int g_framesize;
-
-void message_queue_setup();
-void message_queue_release();
-extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
-extern void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
-extern char ppm_header[];
-extern char ppm_dumpname[];
 
 // semaphore - start
 int abortS1=FALSE, abortS2=FALSE, abortS3=FALSE;
@@ -40,21 +52,24 @@ extern void mainloop(void);
 /* writeback time capturing */
 extern struct timespec ts_writeback_start,ts_writeback_stop;
 extern double writeback_time[BUFF_LENGTH];
-
 /* end to end time for any service */
 extern struct timespec ts_end_to_end_start,ts_end_to_end_stop;
 extern double end_to_end_time[BUFF_LENGTH];
+/* transformation time capturing */
+extern struct timespec ts_transform_start,ts_transform_stop;
+extern double transform_time[BUFF_LENGTH];
+/* read frame from camera time capturing */
+extern struct timespec ts_read_capture_start,ts_read_capture_stop;
+extern double read_capture_time[BUFF_LENGTH];
 
-//
-
-
+//funtion prototype (non service)
+int process_frame(int *frame_stored);
 int save_image(int *frame_stored);
+
 
 void Sequencer(int id)
 {
-  //struct timespec current_time_val;
-  //double current_realtime;
-  int /*rc,*/ flags=0;
+  int flags=0;
 
   // received interval timer signal
   if(abortTest)
@@ -80,17 +95,15 @@ void Sequencer(int id)
 
   // Service_2 @ 10 Hz = 100 msec
   //if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec - to cause interruption to acq together sometime and sometimes not
-  if((seqCnt % 90) == 0) sem_post(&semS2);   //3 sec - read all the messages (for 3 parts)
+  if((seqCnt % 30) == 0) sem_post(&semS2);   //3 sec - read all the messages (for 3 parts)
 
   // Service_3 @ 1 Hz = 1 second
-  if((seqCnt % 60) == 0) sem_post(&semS3); //2sec - to cause interruption to acq together sometime and sometimes not
+  if((seqCnt % 30) == 0) sem_post(&semS3); //2sec - to cause interruption to acq together sometime and sometimes not
 }
 
 void *Service_1_frame_acquisition(void *threadp)
 {
   char buffer[sizeof(void *)+sizeof(int)];
-
-  //int prio;
   int nbytes;
   int id = 999;
   
@@ -99,7 +112,6 @@ void *Service_1_frame_acquisition(void *threadp)
   struct timespec current_time_val;
   double current_realtime;
   unsigned long long S1Cnt=0;
-  //threadParams_t *threadParams = (threadParams_t *)threadp;
 
   // Start up processing and resource initialization
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
@@ -113,56 +125,39 @@ void *Service_1_frame_acquisition(void *threadp)
     
     if(abortS1) break;
       S1Cnt++;
+       
+    mainloop(); // does only acquisition and memcpy to a buffer
     
     if(framecnt > -1)
     {
-      clock_gettime(CLOCK_MONOTONIC, &ts_end_to_end_start);
-    }
+      memcpy(tempptr, temp_g_buffer,sizeof(temp_g_buffer));
+      memcpy(buffer, &tempptr, sizeof(void *));
+      memcpy(&(buffer[sizeof(void *)]), (void *)&id, sizeof(int));
     
-    mainloop();
-    
-    if(framecnt > -1)
-    {
-      clock_gettime(CLOCK_MONOTONIC, &ts_end_to_end_stop);
-      end_to_end_time[framecnt] = dTime(ts_end_to_end_stop, ts_end_to_end_start);
-      syslog(LOG_INFO, "end_to_end_time_mainloop individual is %lf\n", end_to_end_time[framecnt]);
-    }
-    
-    //memset(imagebuff, 0, sizeof(imagebuff));
-    //sprintf(imagebuff, "%d", S1Cnt);
-    
-    memcpy(buffptr, bigbuffer,sizeof(bigbuffer));
-    
-    //printf("Message to send = %s\n", (char *)buffptr);
-    //printf("Sending %ld bytes\n", sizeof(buffptr));
-    
-    memcpy(buffer, &buffptr, sizeof(void *));
-    memcpy(&(buffer[sizeof(void *)]), (void *)&id, sizeof(int));
-    
-    /* send message with priority=30 */
-    if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)), 30)) == ERROR)
-    {
-      perror("Error::TX 1 Message\n");
-    }
-    else
-    {
-      //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
+      /* send message with priority=30 */
+      if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)), 30)) == ERROR)
+      {
+        perror("Error::TX 1 Message\n");
+      }
+      else
+      {
+        //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
+      }
     }
     
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-    syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+    syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
     
     /* 1 minutes +  15 frames for start up */
     if(S1Cnt >= (WRITEBACK_FRAMES+START_UP_FRAMES) )
-    //if(S1Cnt >= (  (((60)*(1)) +  5))  )
     {
       abortS1=TRUE;
       abortTest = TRUE;
       
       // on order of up to milliseconds of latency to get time
       clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+      syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
       sem_post(&semS1);
     } 
   }
@@ -176,15 +171,26 @@ void *Service_2_frame_process(void *threadp)
 {
   printf("Code ran Service_2____________________________\n");
   
+  //receive part
+  int frame_processed = 0;
+  int process_cnt;
+  process_cnt = 0;
+  
+  //send part
+  char buffer_send[sizeof(void *)+sizeof(int)];
+  int nbytes;
+  int id = 999;
+  
   struct timespec current_time_val;
   double current_realtime;
   unsigned long long S2Cnt=0;
-  //int process_cnt;
-  //threadParams_t *threadParams = (threadParams_t *)threadp;
 
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S2 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
   printf("S2 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
+  
+  /* receive logic */    
+  mymq = mq_open(SNDRCV_MQ, O_CREAT|O_RDWR, S_IRWXU, &mq_attr);
 
   while(!abortS2)
   {
@@ -192,11 +198,29 @@ void *Service_2_frame_process(void *threadp)
 
     if(abortS2) break;
       S2Cnt++;
-  
+         
+    //mq receive and process frame 
+    process_cnt = process_frame(&frame_processed);  
+      
+    //mq send    
+    memcpy(buffptr, bigbuffer,sizeof(bigbuffer));
+    memcpy(buffer_send, &buffptr, sizeof(void *));
+    memcpy(&(buffer_send[sizeof(void *)]), (void *)&id, sizeof(int));
+    
+    /* send message with priority=30 */
+    if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)), 30)) == ERROR)
+    {
+      perror("Error::TX 2 Message\n");
+    }
+    else
+    {
+      //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
+    }
+    
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-    syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
-        
+    syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime)); 
+      
     #if 0  
     if(S2Cnt >= ((4)*(10) + 4) )
     {
@@ -204,7 +228,7 @@ void *Service_2_frame_process(void *threadp)
         
       //on order of up to milliseconds of latency to get time
       clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S2_ENDS  Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+      syslog(LOG_CRIT, "S2_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime));
           sem_post(&semS2);
     }
     #endif
@@ -212,20 +236,70 @@ void *Service_2_frame_process(void *threadp)
   pthread_exit((void *)0);
 }
 
+int process_frame(int *frame_stored)
+{
+  char buffer_receive[sizeof(void *)+sizeof(int)];
+  void *buffptr_rx; 
+  unsigned int prio;
+  int nbytes;
+  int id;
+  int return_val = 0;
 
+  if((nbytes = mq_receive(mymq, buffer_receive, (size_t)((sizeof(void *)+sizeof(int))), &prio)) == ERROR)
+  {
+    perror("mq_receive 1\n");
+    return return_val;
+  }
+  else
+  {
+    memcpy(&buffptr_rx, buffer_receive, (sizeof(void *)));
+    memcpy((void *)&id, &(buffer_receive[sizeof(void *)]), (sizeof(int)));
+    
+    
+    clock_gettime(CLOCK_MONOTONIC, &ts_transform_start);
+   
+    process_image(buffptr_rx,614400);
+    
+    clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
+    transform_time[framecnt] = dTime(ts_transform_stop, ts_transform_start);
+    syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[framecnt]);   
+    
+   // aa
+    
+    return_val = 1;
+    *frame_stored = framecnt;
+    return return_val; 
+  }
+  return return_val;
+}
+
+
+
+//SERVICE 3 START
 void *Service_3_frame_storage(void *threadp)
 {
   printf("Code ran Service_3++++++++++++++++++++++++++++++\n");
   
+  //receive part
+  int frame_processed = 0;
+  int transform_count;
+  transform_count = 0;
+  
+  //send part
+  char buffer_send[sizeof(void *)+sizeof(int)];
+  int nbytes;
+  int id = 999;
+  
   struct timespec current_time_val;
   double current_realtime;
   unsigned long long S3Cnt=0;
-  //int store_cnt;
-  //threadParams_t *threadParams = (threadParams_t *)threadp;
 
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S3 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
   printf("S3 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
+  
+  /* receive logic */    
+  mymq2 = mq_open(SNDRCV_MQ_2, O_CREAT|O_RDWR, S_IRWXU, &mq_attr2);
 
   while(!abortS3)
   {
@@ -233,10 +307,31 @@ void *Service_3_frame_storage(void *threadp)
 
     if(abortS3) break;
       S3Cnt++;
+   
+    //mq receive and process frame 
+    transform_count = process_transform_servicepart(&frame_processed);  
 
+    //mq send    
+    memcpy(buffptr_transform, negativebuffer,sizeof(bigbuffer));
+    memcpy(buffer_send, &buffptr_transform, sizeof(void *));
+    memcpy(&(buffer_send[sizeof(void *)]), (void *)&id, sizeof(int));
+    
+    /* send message with priority=30 */
+    if((nbytes = mq_send(mymq3, buffer_send, (size_t)(sizeof(void *)+sizeof(int)), 30)) == ERROR)
+    {
+      perror("Error::TX 2 Message\n");
+    }
+    else
+    {
+      //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
+    }
+
+    
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-    syslog(LOG_CRIT, "S3_SERVICE at Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+    syslog(LOG_CRIT, "S3_SERVICE at Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
+      
+      
       
     #if 0  
     if(S3Cnt >= ((30)*(3) + 6 ))
@@ -245,7 +340,7 @@ void *Service_3_frame_storage(void *threadp)
       
       // on order of up to milliseconds of latency to get time
       clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S3_ENDS  Hz on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime)*MSEC_PER_SEC);
+      syslog(LOG_CRIT, "S3_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
   
       sem_post(&semS3);
     }
@@ -255,7 +350,45 @@ void *Service_3_frame_storage(void *threadp)
   pthread_exit((void *)0);
 }
 
+int process_transform_servicepart(int *frame_stored)
+{
+  char buffer_receive[sizeof(void *)+sizeof(int)];
+  void *buffptr_rx; 
+  unsigned int prio;
+  int nbytes;
+  int id;
+  int return_val = 0;
+  int size = 614400;
 
+  if((nbytes = mq_receive(mymq2, buffer_receive, (size_t)((sizeof(void *)+sizeof(int))), &prio)) == ERROR)
+  {
+    perror("mq_receive 2\n");
+    return return_val;
+  }
+  else
+  {
+    memcpy(&buffptr_rx, buffer_receive, (sizeof(void *)));
+    memcpy((void *)&id, &(buffer_receive[sizeof(void *)]), (sizeof(int)));
+        
+    clock_gettime(CLOCK_MONOTONIC, &ts_end_to_end_start);  
+    process_transform(buffptr_rx,size);
+    
+    clock_gettime(CLOCK_MONOTONIC, &ts_end_to_end_stop);
+    end_to_end_time[framecnt] = dTime(ts_end_to_end_stop, ts_end_to_end_start);
+    syslog(LOG_INFO, "end_to_end_time_negative individual is %lf\n", end_to_end_time[framecnt]);
+  
+    return_val = 1;
+    *frame_stored = framecnt;
+    return return_val; 
+  }
+  return return_val;
+}
+
+//SERVICE 3 END
+
+
+
+//WRITEBACK START
 void *writeback_dump(void *threadp)
 {
   printf("Writeback thread ran\n");
@@ -272,17 +405,18 @@ void *writeback_dump(void *threadp)
   printf("WBthread @ sec=%6.9lf\n", current_realtime-start_realtime);
   
   /* receive logic */    
-  mymq = mq_open(SNDRCV_MQ , O_CREAT|O_RDWR, S_IRWXU, &mq_attr);
+  mymq3 = mq_open(SNDRCV_MQ_3 , O_CREAT|O_RDWR, S_IRWXU, &mq_attr3);
   
   while(!abort_wb)
   {
     WBCnt++; 
+   
     return_val = save_image(&frames_stored);
-    
+
     if(return_val == 1)
     {
       clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ msec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)*MSEC_PER_SEC); 
+      syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)); 
     }
     
     if(frames_stored == WRITEBACK_FRAMES)
@@ -295,9 +429,47 @@ void *writeback_dump(void *threadp)
 }
 
 
+int save_image(int *frame_stored)
+{
+  char buffer[sizeof(void *)+sizeof(int)];
+  void *buffptr1; 
+  unsigned int prio;
+  int nbytes;
+  int id;
+  int return_val =0;
+
+  if((nbytes = mq_receive(mymq3, buffer, (size_t)((sizeof(void *)+sizeof(int))), &prio)) == ERROR)
+  {
+    perror("mq_receive 3\n");
+    return return_val;
+  }
+  else
+  {
+    memcpy(&buffptr1, buffer, (sizeof(void *)));
+    memcpy((void *)&id, &(buffer[sizeof(void *)]), (sizeof(int)));
+  
+    clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
+    #if COLOR_CONVERT_RGB
+    dump_ppm(buffptr1, ((g_framesize*6)/4), framecnt, &frame_time);
+    #else
+    dump_pgm(buffptr1, (g_framesize/2), framecnt, &frame_time);
+    #endif
+        
+    return_val = 1;
+    *frame_stored = framecnt;
+    return return_val;   
+ 
+  }
+  return return_val;
+}
+
+//WRITEBACK END
+
+
+
 void message_queue_setup()
 {
-  /* setup common message q attributes - 1*/
+  /* setup common message q attributes - 1 */
   mq_attr.mq_maxmsg = 100;
   mq_attr.mq_msgsize = sizeof(void *)+sizeof(int);
   
@@ -314,7 +486,7 @@ void message_queue_setup()
     printf("\nMQ 1 created successfully\n");
   }
   
-  /* setup common message q attributes  - 2*/
+  /* setup common message q attributes  - 2 */
   mq_attr2.mq_maxmsg = 100;
   mq_attr2.mq_msgsize = sizeof(void *)+sizeof(int);
   
@@ -330,61 +502,34 @@ void message_queue_setup()
   {
     printf("MQ 2 created successfully\n");
   }
+  
+  /* setup common message q attributes  - 3 */
+  mq_attr3.mq_maxmsg = 100;
+  mq_attr3.mq_msgsize = sizeof(void *)+sizeof(int);
+  
+  mq_attr3.mq_flags = 0;
+  
+  mymq3 = mq_open(SNDRCV_MQ_3 , O_CREAT|O_RDWR, S_IRWXU, &mq_attr3);
+  
+  if(mymq3 == (mqd_t)ERROR)
+  {
+    perror("Error to open message queue 3\n");
+  }
+  else
+  {
+    printf("MQ 3 created successfully\n");
+  }
 }
 
 void message_queue_release()
 {
   mq_close(mymq);
-  mq_close(mymq2);
-  
   mq_unlink(SNDRCV_MQ);
+
+  mq_close(mymq2);
   mq_unlink(SNDRCV_MQ_2);
+  
+  mq_close(mymq3);
+  mq_unlink(SNDRCV_MQ_3);
 
 }
-
-int save_image(int *frame_stored)
-{
-  char buffer[sizeof(void *)+sizeof(int)];
-  void *buffptr; 
-  unsigned int prio;
-  int nbytes;
-  //int count = 0;
-  int id;
-  int return_val =0;
-
-  if((nbytes = mq_receive(mymq, buffer, (size_t)((sizeof(void *)+sizeof(int))), &prio)) == ERROR)
-  {
-    perror("mq_receive 1\n");
-    return return_val;
-  }
-  else
-  {
-    memcpy(&buffptr, buffer, (sizeof(void *)));
-    memcpy((void *)&id, &(buffer[sizeof(void *)]), (sizeof(int)));
-    
-    //printf("receive: ptr msg 0x%p received with priority = %d, length = %d, id = %d\n", buffptr, prio, nbytes, id);
-    //syslog(LOG_CRIT, "Service 2::Messages received = %s\n", (char *)buffptr);
-    
-    if(framecnt > -1)
-    {
-    
-      clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
-      
-      #if COLOR_CONVERT_RGB
-      dump_ppm(buffptr, ((g_framesize*6)/4), framecnt, &frame_time);
-      #else
-      dump_pgm(buffptr, (g_framesize/2), framecnt, &frame_time);
-      #endif
-      clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-      writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
-      
-      syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
-      
-      return_val = 1;
-      *frame_stored = framecnt;
-      return return_val;
-    }   
-  }
-  return return_val;
-}
-

@@ -27,6 +27,7 @@
 
 #define SNDRCV_MQ	            ("/send_receive_mq_image")
 #define SNDRCV_MQ_2           ("/send_receive_mq_image_2")
+#define SNDRCV_MQ_3           ("/send_receive_mq_image_3")
 
 #define MAX_MSG_SIZE	        (100)
 #define ERROR		              (-1)

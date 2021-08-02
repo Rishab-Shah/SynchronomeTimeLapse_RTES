@@ -27,28 +27,32 @@
 #define NUM_CPU_CORES          (4)
 #define TRUE                   (1)
 #define FALSE                  (0)
-#define RT_CORE                (2)
 #define NUM_THREADS            (3)
                               
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
-int cpu_core[NUM_THREADS] = {1,1,2};
-//unsigned char transfer_buffer[10][(1280*960)] = {0};
+int cpu_core[NUM_THREADS] = {1,2,2};
 // MQ - START
 
 extern char imagebuff[4096];
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
 
-void *buffptr;
 extern unsigned char bigbuffer[(1280*960)];
+void *buffptr;
+
+unsigned char temp_g_buffer[614400];
+void *tempptr;
+
+extern unsigned char negativebuffer[(1280*960)];
+void *buffptr_transform;
 
 extern void message_queue_setup();
 extern void message_queue_release();
 void get_linux_details();
 // MQ - END
 
-//static CB_t cbfifo_tx;
+
 struct timespec start_time_val;
 
 extern int abortTest;
@@ -103,7 +107,8 @@ static int force_format = 1;
 //static enum io_method   io = IO_METHOD_USERPTR;
 //static enum io_method   io = IO_METHOD_READ;
 extern enum io_method io;
-char ppm_uname_string[100];
+#define UNAME_PATH_LENGTH   100
+char ppm_uname_string[UNAME_PATH_LENGTH];
 
 static void usage(FILE *fp, int argc, char **argv)
 {
@@ -152,8 +157,7 @@ int main(int argc, char **argv)
     int idx;
     int c;
 
-    c = getopt_long(argc, argv,
-                short_options, long_options, &idx);
+    c = getopt_long(argc, argv,short_options, long_options, &idx);
                 
     if (-1 == c)
         break;
@@ -307,7 +311,7 @@ int main(int argc, char **argv)
   pthread_attr_setaffinity_np(&writeback_sched_attr, sizeof(cpu_set_t), &cpuset_wb);
   
   // Create Service threads which will block awaiting release for:
-#if 1
+
   // Servcie_1 = RT_MAX-1	@ 20 Hz
   rt_param[0].sched_priority=rt_max_prio-1;
   pthread_attr_setschedparam(&rt_sched_attr[0], &rt_param[0]);
@@ -334,27 +338,14 @@ int main(int argc, char **argv)
       perror("pthread_create for service 3 - flash frame storage");
   else
       printf("pthread_create successful for service 3\n");
-#endif
 
   writeback_threadparam.threadIdx = 5;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
-
-  
-  // Wait for service threads to initialize and await relese by sequencer.
-  //
-  // Note that the sleep is not necessary of RT service threads are created with 
-  // correct POSIX SCHED_FIFO priorities compared to non-RT priority of this main
-  // program.
-  //
-  // sleep(1);
-
-  // Create Sequencer thread, which like a cyclic executive, is highest prio
-
-  // Sequencer = RT_MAX	@ 100 Hz
+  //sleep(1);
   
   char c;
-  printf("Shotgun mode\n");
+  printf("\n\nShotgun mode\n\n");
   c = getchar();
   printf("executed\n");
   putchar(c);
@@ -385,7 +376,7 @@ int main(int argc, char **argv)
   
   
 #if CAMERA_1
-  // shutdown of frame acquisition service
+  //shutdown of frame acquisition service
   v4l2_frame_acquisition_shutdown();
   print_analysis();
   fprintf(stderr, "\n");
@@ -394,6 +385,9 @@ int main(int argc, char **argv)
   message_queue_release();
   
   free(buffptr);
+  free(tempptr);
+  free(buffptr_transform);
+  
   printf("heap space memory freed\n");
   
   printf("\nCAMERA_TEST COMPLETE\n");
@@ -457,17 +451,18 @@ void init_variables()
   seqCnt = 0;
   
   buffptr = (void *)malloc(sizeof(bigbuffer));
+  tempptr = (void *)malloc(sizeof(temp_g_buffer)); //used
+  buffptr_transform = (void *)malloc(sizeof(negativebuffer));
   
-  get_linux_details();
-  
+  get_linux_details(); 
 }
 
-#define PATH_MAX   100
+
 void get_linux_details()
 {
   FILE *fp;
   int status;
-  char path[PATH_MAX];
+  char path[UNAME_PATH_LENGTH];
   
   strcpy(path,"");
   strcpy(ppm_uname_string,"");
@@ -476,23 +471,21 @@ void get_linux_details()
   if (fp == NULL)
       /* Handle error */;
   
-  while(fgets(path, PATH_MAX, fp) != NULL)
+  while(fgets(path, UNAME_PATH_LENGTH, fp) != NULL)
       printf("%s", path);
   
   strcpy(ppm_uname_string,"#");
-  strncat(ppm_uname_string,path,strlen(path));
-  //strncpy(ppm_uname_string,path,strlen(path));  
+  strncat(ppm_uname_string,path,strlen(path)); 
   status = pclose(fp);
   
-  if (status == -1)
+  if(status == -1)
   {
-      /* Error reported by pclose() */
-
+    /* Error reported by pclose() */
   }
   else
   {
-      /* Use macros described under wait() to inspect `status' in order
-         to determine success/failure of command executed by popen() */
-
+    /* Use macros described under wait() to inspect `status' in order
+    to determine success/failure of command executed by popen() */
   }
+  
 }
