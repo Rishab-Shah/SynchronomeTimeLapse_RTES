@@ -52,7 +52,7 @@ extern void message_queue_release();
 void get_linux_details();
 // MQ - END
 
-
+int running_frequency = 30;
 struct timespec start_time_val;
 
 extern int abortTest;
@@ -85,7 +85,7 @@ extern struct timespec time_now, time_start, time_stop,time_now_negative;
 /* transformation time capturing */
 extern struct timespec ts_transform_start,ts_transform_stop;
 extern double transform_time[BUFF_LENGTH];
-/* read frame from camera time capturing */
+/* read frame from camera time capturing + 1 for 1801 extra frame */
 extern struct timespec ts_read_capture_start,ts_read_capture_stop;
 extern double read_capture_time[BUFF_LENGTH+1];
 
@@ -110,95 +110,43 @@ extern enum io_method io;
 #define UNAME_PATH_LENGTH   100
 char ppm_uname_string[UNAME_PATH_LENGTH];
 
-static void usage(FILE *fp, int argc, char **argv)
+
+
+int main(int argc, char *argv[])
 {
-   fprintf(fp,
-   "Usage: %s [options]\n\n"
-   "Version 1.3\n"
-   "Options:\n"
-   "-d | --device name   Video device name [%s]\n"
-   "-h | --help          Print this message\n"
-   "-m | --mmap          Use memory mapped buffers [default]\n"
-   "-r | --read          Use read() calls\n"
-   "-u | --userp         Use application allocated buffers\n"
-   "-o | --output        Outputs stream to stdout\n"
-   "-f | --format        Force format to 640x480 GREY\n"
-   "-c | --count         Number of frames to grab [%i]\n"
-   "",
-   argv[0], dev_name, frame_count);
-}
-
-static const char short_options[] = "d:hmruofc:";
-
-static const struct option long_options[] = 
-{
-  { "device", required_argument, NULL, 'd' },
-  { "help",   no_argument,       NULL, 'h' },
-  { "mmap",   no_argument,       NULL, 'm' },
-  { "read",   no_argument,       NULL, 'r' },
-  { "userp",  no_argument,       NULL, 'u' },
-  { "output", no_argument,       NULL, 'o' },
-  { "format", no_argument,       NULL, 'f' },
-  { "count",  required_argument, NULL, 'c' },
-  { 0,        0,                 0,     0  }
-};
-
-
-int main(int argc, char **argv)
-{
-
-  if(argc > 1)
-      dev_name = argv[1];
-  else
-      dev_name = "/dev/video0";
-
-  for (;;)
+  dev_name = "/dev/video0";
+  int compare = 0;
+  
+  //update later
+  if(argc > 2)
   {
-    int idx;
-    int c;
-
-    c = getopt_long(argc, argv,short_options, long_options, &idx);
-                
-    if (-1 == c)
-        break;
-
-    switch (c)
+    sscanf(argv[2], "%d", &compare);
+    if(compare == 10)
     {
-      case 0: /* getopt_long() flag */
-          break;
-      case 'd':
-        dev_name = optarg;
-        break;
-      case 'h':
-        usage(stdout, argc, argv);
-        exit(EXIT_SUCCESS);
-      case 'm':
-        io = IO_METHOD_MMAP;
-        break;
-      case 'r':
-        io = IO_METHOD_READ;
-        break;
-      case 'u':
-        io = IO_METHOD_USERPTR;
-        break;
-      case 'o':
-        out_buf++;
-        break;
-      case 'f':
-        force_format++;
-        break;
-      case 'c':
-        errno = 0;
-        frame_count = strtol(optarg, NULL, 0);
-        if (errno)
-                errno_exit(optarg);
-        break;
-      default:
-        usage(stderr, argc, argv);
-        exit(EXIT_FAILURE);
+      running_frequency = 3;
+      printf("Running Frequency = 10 Hz\n");
+    }
+    else if(compare == 1)
+    {
+      running_frequency = 30;
+      printf("Running Frequency = 1 Hz\n");
+    }
+    else
+    {
+      printf("Running Frequency = 1 Hz\n");
     }
   }
-
+  else if(argc < 2)
+  {
+    printf("else if -> Running Frequency = 1 Hz\n");
+    /* Do nothing */
+  }
+  else
+  {
+    printf("else\n");
+  }
+  
+  
   init_variables();
   
   message_queue_setup();
@@ -251,7 +199,7 @@ int main(int argc, char **argv)
   if (sem_init (&semS2, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
   if (sem_init (&semS3, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
 
-  mainpid=getpid();
+  mainpid = getpid();
 
   rt_max_prio = sched_get_priority_max(SCHED_FIFO);
   rt_min_prio = sched_get_priority_min(SCHED_FIFO);
@@ -389,8 +337,7 @@ int main(int argc, char **argv)
   free(buffptr_transform);
   
   printf("heap space memory freed\n");
-  
-  printf("\nCAMERA_TEST COMPLETE\n");
+  printf("CAMERA_TEST COMPLETE\n");
   
   return 0;
 }
@@ -451,7 +398,7 @@ void init_variables()
   seqCnt = 0;
   
   buffptr = (void *)malloc(sizeof(bigbuffer));
-  tempptr = (void *)malloc(sizeof(temp_g_buffer)); //used
+  tempptr = (void *)malloc(sizeof(temp_g_buffer));
   buffptr_transform = (void *)malloc(sizeof(negativebuffer));
   
   get_linux_details(); 

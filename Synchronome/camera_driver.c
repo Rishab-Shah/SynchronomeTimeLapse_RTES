@@ -59,7 +59,7 @@ extern char *dev_name;
 int fd = -1;
 enum io_method   io = IO_METHOD_MMAP;
 struct v4l2_format fmt;
-int force_format=1;
+const int force_format=1;
 // always ignore first 8 frames 
 int framecnt = -START_UP_FRAMES;
 int g_framesize;
@@ -119,11 +119,13 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
 void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
 void yuv2rgb_float(float y, float u, float v, unsigned char *r, unsigned char *g, unsigned char *b);
 void yuv2rgb(int y, int u, int v, unsigned char *r, unsigned char *g, unsigned char *b);
+#if 0
 void negative_transformation(unsigned char colored_r, unsigned char colored_g, unsigned char colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b);
+#endif
+void negative_transformation(unsigned char *colored_r, unsigned char *colored_g, unsigned char *colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b);
 
 void mainloop(void)
 {
-// counti s not used as of now anywhere
   fd_set fds;
   struct timeval tv;
   int rc;
@@ -163,7 +165,7 @@ void mainloop(void)
     {	
       clock_gettime(CLOCK_MONOTONIC, &time_now);
       fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / NANOSEC_PER_SEC;
-      syslog(LOG_INFO, "read_frame_read_at %lf, @ %lf FPS\n", (fnow-fstart), (double)(framecnt+1) / (fnow-fstart));
+      syslog(LOG_INFO, "read_frame_read_at %lf @ %lf FPS\n", (fnow-fstart), (double)(framecnt+1) / (fnow-fstart));
     }
     else 
     {
@@ -184,7 +186,6 @@ int read_frame()
   struct v4l2_buffer buf;
   unsigned int i;
 
-    
   if(framecnt > -1) 
   {
     clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
@@ -198,7 +199,6 @@ int read_frame()
       
       buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
       buf.memory = V4L2_MEMORY_MMAP;
-      
       
       if(-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
       {
@@ -217,13 +217,10 @@ int read_frame()
       }
       
       assert(buf.index < n_buffers);
-      
-      //printf("buf.bytesused = %d\n",buf.bytesused);
-      //printf("buffers[buf.index].start = %p\n",buffers[buf.index].start);
-      //printf("buf.index = %d\n",buf.index);
            
       memcpy((void *)&temp_g_buffer[0],buffers[buf.index].start,buf.bytesused);
       framecnt++;
+      clock_gettime(CLOCK_REALTIME, &frame_time);
  
       if(framecnt > -1) 
       {
@@ -232,7 +229,7 @@ int read_frame()
         syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
       }
       
-      if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
+      if(-1 == xioctl(fd, VIDIOC_QBUF, &buf))
         errno_exit("VIDIOC_QBUF");
         
       break;
@@ -296,12 +293,24 @@ int read_frame()
 }
 
 
+#if 0
+//original
 #define SAT                   (255)
 void negative_transformation(unsigned char colored_r, unsigned char colored_g, unsigned char colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b)
 {
   *negative_r = SAT - colored_r;
   *negative_g = SAT - colored_g;
   *negative_b = SAT - colored_b;
+}
+
+#endif
+
+#define SAT                   (255)
+void negative_transformation(unsigned char *colored_r, unsigned char *colored_g, unsigned char *colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b)
+{
+  *negative_r = SAT - *colored_r;
+  *negative_g = SAT - *colored_g;
+  *negative_b = SAT - *colored_b;
 }
 
 void process_transform(const void *p, int size)
@@ -313,8 +322,8 @@ void process_transform(const void *p, int size)
   {
     for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
     {
-      negative_transformation((int)pptr[newi], (int)pptr[newi+1], (int)pptr[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
-      negative_transformation((int)pptr[newi+3], (int)pptr[newi+4], (int)pptr[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+      //negative_transformation((int)pptr[newi], (int)pptr[newi+1], (int)pptr[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
+      //negative_transformation((int)pptr[newi+3], (int)pptr[newi+4], (int)pptr[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
     }
   }
   else
@@ -334,7 +343,7 @@ void process_image(const void *p, int size)
   unsigned char *pptr = (unsigned char *)p;
 
   //record when process was called
-  clock_gettime(CLOCK_REALTIME, &frame_time);    
+ 
   syslog(LOG_INFO,"frame %d: ",framecnt);
     
   if(framecnt == 0) 
@@ -358,8 +367,9 @@ void process_image(const void *p, int size)
       y_temp=(int)pptr[i]; u_temp=(int)pptr[i+1]; y2_temp=(int)pptr[i+2]; v_temp=(int)pptr[i+3];     
       yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
       yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
-      //negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
-      //negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+      
+      negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
+      negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
     }
     #else
     for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
@@ -368,6 +378,7 @@ void process_image(const void *p, int size)
       y_temp=(int)pptr[i]; u_temp=(int)pptr[i+1]; y2_temp=(int)pptr[i+2]; v_temp=(int)pptr[i+3];
       yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
       yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
+      
       negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
       negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
     }      
@@ -497,7 +508,7 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
 
   clock_gettime(CLOCK_MONOTONIC, &time_now);
   fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / NANOSEC_PER_SEC;
-  syslog(LOG_INFO, "Frame_written_to_flash at %lf, %d, bytes\n", (fnow-fstart), total);
+  syslog(LOG_INFO, "Frame_written_to_flash at %lf %d bytes\n", (fnow-fstart), total);
 
   close(dumpfd);
     
@@ -545,11 +556,16 @@ void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
 
 void print_analysis()
 {
+  int n = 2;
+  int start = 3;
+  int z =2;
+  
   /* read/capture time */
   double sum = 0;
   double avg_time = 0;
-  double temp_value = read_capture_time[0];
-  for(int i = 1; i<BUFF_LENGTH-1;i++ )
+  double temp_value = read_capture_time[n];
+  /* 1801 frames -1 required */
+  for(int i = start; i<BUFF_LENGTH-1;i++ )
   {
     if(temp_value < read_capture_time[i])
     {
@@ -558,7 +574,7 @@ void print_analysis()
     //printf("read_capture_time:: %lf\n",read_capture_time[i]);
     sum = sum + read_capture_time[i];
   }
-  avg_time = sum/CAPTURE_FRAMES;
+  avg_time = sum/(CAPTURE_FRAMES-z);
 
   syslog(LOG_INFO, "Total frames = %d frames, Average capture time = %lf sec, Average read_capture_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - read_capture_time %lf sec and %lf FPS\n",temp_value, (1/temp_value));
@@ -566,8 +582,8 @@ void print_analysis()
   /* transform time */
   sum = 0;
   avg_time = 0;
-  temp_value = transform_time[0];
-  for(int i = 1; i<BUFF_LENGTH;i++ )
+  temp_value = transform_time[n];
+  for(int i = start; i<BUFF_LENGTH;i++ )
   {
     if(temp_value < transform_time[i])
     {
@@ -576,7 +592,7 @@ void print_analysis()
     //printf("transform_time:: %lf\n",transform_time[i]);
     sum = sum + transform_time[i];
   }
-  avg_time = sum/CAPTURE_FRAMES;
+  avg_time = sum/(CAPTURE_FRAMES-z);
   
   syslog(LOG_INFO, "Total frames = %d frames, Average transform time = %lf sec, Average Transform Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - transform_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
@@ -584,9 +600,9 @@ void print_analysis()
   /* write-back time */
   sum = 0;
   avg_time = 0;
-  temp_value = writeback_time[0];
+  temp_value = writeback_time[n];
   
-  for(int i = 1; i<BUFF_LENGTH;i++ )
+  for(int i = start; i<BUFF_LENGTH;i++ )
   {
     if(temp_value < writeback_time[i])
     {
@@ -595,7 +611,7 @@ void print_analysis()
     //printf("writeback_time:: %lf\n",writeback_time[i]);
     sum = sum + writeback_time[i];
   }
-  avg_time = sum/CAPTURE_FRAMES;
+  avg_time = sum/(CAPTURE_FRAMES-z);
   
   syslog(LOG_INFO, "Total frames = %d frames, Average writeback time = %lf sec, Average writeback Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - writeback_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
@@ -603,8 +619,8 @@ void print_analysis()
   /* end_to_end_time time */
   sum = 0;
   avg_time = 0;
-  temp_value = end_to_end_time[0];
-  for(int i = 1; i<BUFF_LENGTH;i++ )
+  temp_value = end_to_end_time[n];
+  for(int i = start; i<BUFF_LENGTH;i++ )
   {
     if(temp_value < end_to_end_time[i])
     {
@@ -613,7 +629,7 @@ void print_analysis()
     //printf("end_to_end_time:: %lf\n",end_to_end_time[i]);
     sum = sum + end_to_end_time[i];
   }
-  avg_time = sum/CAPTURE_FRAMES;
+  avg_time = sum/(CAPTURE_FRAMES-z);
   
   syslog(LOG_INFO, "Total frames = %d frames, Average end_to_end_time time = %lf sec, Average end_to_end_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - end_to_end_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
@@ -621,8 +637,8 @@ void print_analysis()
   #if 0
   sum = 0;
   avg_time = 0;
-  temp_value = acq_to_tranform_time[0];
-  for(int i = 1; i<BUFF_LENGTH;i++ )
+  temp_value = acq_to_tranform_time[n];
+  for(int i = start; i<BUFF_LENGTH;i++ )
   {
     if(temp_value < acq_to_tranform_time[i])
     {
@@ -631,7 +647,7 @@ void print_analysis()
     //printf("writeback_time:: %lf\n",writeback_time[i]);
     sum = sum + acq_to_tranform_time[i];
   }
-  avg_time = sum/CAPTURE_FRAMES;
+  avg_time = sum/(CAPTURE_FRAMES-z);
   
   syslog(LOG_INFO, "Total frames = %d frames, Average acq_to_tranform_time time = %lf sec, Average acq_to_tranform_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - acq_to_tranform_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
