@@ -4,7 +4,10 @@
 void message_queue_setup();
 void message_queue_release();
 
-extern void *tempptr;
+
+extern void *vpt[20];
+
+//extern void *tempptr;
 extern unsigned char temp_g_buffer[614400];
 
 extern void *buffptr;
@@ -26,7 +29,7 @@ mqd_t mymq3;
 
 
 
-
+extern int num_of_mallocs;
 
 
 extern int running_frequency;
@@ -45,8 +48,8 @@ extern struct timespec frame_time;
 extern int g_framesize;
 
 // semaphore - start
-int abortS1=FALSE, abortS2=FALSE, abortS3=FALSE;
-sem_t semS1, semS2, semS3;
+int abortS0=FALSE, abortS1=FALSE, abortS2=FALSE, abortS3=FALSE;
+sem_t semS0, semS1, semS2, semS3;
 int abortTest=FALSE;
 timer_t timer_1;
 struct itimerspec last_itime;
@@ -70,7 +73,7 @@ extern struct timespec ts_transform_start,ts_transform_stop;
 extern double transform_time[BUFF_LENGTH];
 /* read frame from camera time capturing */
 extern struct timespec ts_read_capture_start,ts_read_capture_stop;
-extern double read_capture_time[BUFF_LENGTH];
+extern double read_capture_time[BUFF_LENGTH+1];
 
 //funtion prototype (non service)
 void process_frame(int *frame_no_to_transfer,struct timespec *st_frame_time_to_transfer);
@@ -80,8 +83,10 @@ int process_transform_servicepart(int *frame_stored);
 void Sequencer(int id)
 {
   int flags=0;
-
-  // received interval timer signal
+  
+  sem_post(&semS0);
+  
+    // received interval timer signal
   if(abortTest)
   {
     // disable interval timer
@@ -91,24 +96,55 @@ void Sequencer(int id)
     itime.it_value.tv_nsec = 0;
     timer_settime(timer_1, flags, &itime, &last_itime);
     printf("Disabling sequencer interval timer with abort=%d and %llu\n", abortTest, seqCnt);
-
+    
     // shutdown all services
-    abortS1=TRUE; abortS2=TRUE; abortS3=TRUE;
-    sem_post(&semS1); sem_post(&semS2); sem_post(&semS3);
+    abortS0=TRUE; abortS1=TRUE; abortS2=TRUE; abortS3=TRUE;
+    sem_post(&semS0); sem_post(&semS1); sem_post(&semS2); sem_post(&semS3);
   }
-         
+  
   seqCnt++;
   
-  // Release each service at a sub-rate of the generic sequencer rate
-  //Service_1 @ 30 Hz = 33.33msec
-  if((seqCnt % running_frequency) == 0) sem_post(&semS1); //1sec - > acquisitoin rate 0. (3Hz to 20 Hz for diff logic)
+}
 
-  // Service_2 @ 10 Hz = 100 msec
-  //if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec - to cause interruption to acq together sometime and sometimes not
-  if((seqCnt % running_frequency) == 0) sem_post(&semS2);   //3 sec - read all the messages (for 3 parts)
+void *Service_0_Sequencer(void *threadp)
+{ 
+  printf("Code ran Service_0_#############################\n");
 
-  // Service_3 @ 1 Hz = 1 second
-  if((seqCnt % 2) == 0) sem_post(&semS3); //2sec - to cause interruption to acq together sometime and sometimes not
+  struct timespec current_time_val;
+  double current_realtime;
+  unsigned long long S0Cnt=0;
+
+  // Start up processing and resource initialization
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "S0 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
+  printf("S0 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
+
+  while(!abortS0) // check for synchronous abort request
+  {
+    // wait for service request from the sequencer, a signal handler or ISR in kernel
+    sem_wait(&semS0);
+    
+    if(abortS0) break;
+      S0Cnt++;
+       
+    // Release each service at a sub-rate of the generic sequencer rate
+    //Service_1 @ 30 Hz = 33.33msec
+    if((S0Cnt % running_frequency) == 0) sem_post(&semS1); //1sec - > acquisitoin rate 0. (3Hz to 20 Hz for diff logic)
+    
+    // Service_2 @ 10 Hz = 100 msec
+    //if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec - to cause interruption to acq together sometime and sometimes not
+    if((S0Cnt % running_frequency) == 0) sem_post(&semS2);   //3 sec - read all the messages (for 3 parts)
+    
+    // Service_3 @ 1 Hz = 1 second
+    if((S0Cnt % 2) == 0) sem_post(&semS3); //2sec - to cause interruption to acq together sometime and sometimes not
+       
+    // on order of up to milliseconds of latency to get time
+    clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+    syslog(LOG_CRIT, "S0_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S0Cnt, (current_realtime-start_realtime));
+   
+  }
+  // Resource shutdown here
+  pthread_exit((void *)0);
 }
 
 void *Service_1_frame_acquisition(void *threadp)
@@ -121,6 +157,7 @@ void *Service_1_frame_acquisition(void *threadp)
   struct timespec current_time_val;
   double current_realtime;
   unsigned long long S1Cnt=0;
+  int incrementer = 0;
 
   // Start up processing and resource initialization
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
@@ -138,9 +175,21 @@ void *Service_1_frame_acquisition(void *threadp)
     mainloop(); // does only acquisition and memcpy to a buffer
 
     if(framecnt > -1)
-    {
+    { 
+      if(incrementer % (num_of_mallocs) == 0)
+      {
+        incrementer = 0;
+      }
+      
+      memcpy(vpt[incrementer], temp_g_buffer,sizeof(temp_g_buffer));
+      memcpy(buffer, &vpt[incrementer], sizeof(void *));
+      incrementer++;
+
+      #if 0
       memcpy(tempptr, temp_g_buffer,sizeof(temp_g_buffer));
       memcpy(buffer, &tempptr, sizeof(void *));
+      #endif
+      
       memcpy(&(buffer[sizeof(void *)]), &framecnt, sizeof(int));  //global - one time in queue
       memcpy(&(buffer[sizeof(void *) + sizeof(int)]), &frame_time, sizeof(struct timespec)); //global - one time in queue
     
@@ -290,15 +339,7 @@ void process_frame(int *frame_no_to_transfer,struct timespec *st_frame_time_to_t
 void *Service_3_frame_storage(void *threadp)
 {
   printf("Code ran Service_3++++++++++++++++++++++++++++++\n");
-  
-  //receive part
-  //int frame_processed = 0;
-  //int transform_count;
-  //transform_count = 0;
-  
-  //send part
-  //char buffer_send[sizeof(void *)+sizeof(int)+sizeof(struct timespec)];
-  
+
   struct timespec current_time_val;
   double current_realtime;
   unsigned long long S3Cnt=0;
@@ -307,9 +348,6 @@ void *Service_3_frame_storage(void *threadp)
   syslog(LOG_CRIT, "S3 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
   printf("S3 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
   
-  /* receive logic */    
-  //mymq2 = mq_open(SNDRCV_MQ_2, O_CREAT|O_RDWR, S_IRWXU, &mq_attr2);
-
   while(!abortS3)
   {
     sem_wait(&semS3);
@@ -317,27 +355,6 @@ void *Service_3_frame_storage(void *threadp)
     if(abortS3) break;
       S3Cnt++;
      
-    #if 0
-    //mq receive and process frame 
-    //transform_count = process_transform_servicepart(&frame_processed);  
-
-    //mq send    
-    memcpy(buffptr_transform, negativebuffer,sizeof(bigbuffer));
-    memcpy(buffer_send, &buffptr_transform, sizeof(void *));
-    memcpy(&(buffer_send[sizeof(void *)]), (void *)&id, sizeof(int));
-    
-    /* send message with priority=30 */
-    if((nbytes = mq_send(mymq3, buffer_send, (size_t)(sizeof(void *)+sizeof(int)), 30)) == ERROR)
-    {
-      perror("Error::TX 2 Message\n");
-    }
-    else
-    {
-      //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
-    }
-
-    #endif
-    
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S3_SERVICE at Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
@@ -440,9 +457,6 @@ int save_image(int *frame_stored)
   }
   return return_val;
 }
-
-
-
 
 
 void message_queue_setup()
@@ -566,7 +580,6 @@ void *Service_3_frame_storage(void *threadp)
       //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
     }
 
-    
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S3_SERVICE at Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
@@ -663,7 +676,6 @@ void *writeback_dump(void *threadp)
       abort_wb = TRUE;
     }
   }
-  
   pthread_exit((void *)0); 
 }
 

@@ -66,7 +66,6 @@ int g_framesize;
 
 unsigned char bigbuffer[(1280*960)];
 unsigned char negativebuffer[(1280*960)];
-int read_framecnt = -START_UP_FRAMES;
 
 /* transformation time capturing */
 struct timespec ts_transform_start,ts_transform_stop;
@@ -217,13 +216,14 @@ int read_frame()
       }
       
       assert(buf.index < n_buffers);
-           
-      memcpy((void *)&temp_g_buffer[0],buffers[buf.index].start,buf.bytesused);
+              
+      //process_image(buffers[0].start, buffers[0].length);
       framecnt++;
       clock_gettime(CLOCK_REALTIME, &frame_time);
  
       if(framecnt > -1) 
       {
+        memcpy((void *)&temp_g_buffer[0],buffers[buf.index].start,buf.bytesused);
         clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
         read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
         syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
@@ -564,6 +564,7 @@ void print_analysis()
   double sum = 0;
   double avg_time = 0;
   double temp_value = read_capture_time[n];
+  printf("Here I am \n");
   /* 1801 frames -1 required */
   for(int i = start; i<BUFF_LENGTH-1;i++ )
   {
@@ -575,7 +576,7 @@ void print_analysis()
     sum = sum + read_capture_time[i];
   }
   avg_time = sum/(CAPTURE_FRAMES-z);
-
+  printf("Here I terminate \n");
   syslog(LOG_INFO, "Total frames = %d frames, Average capture time = %lf sec, Average read_capture_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - read_capture_time %lf sec and %lf FPS\n",temp_value, (1/temp_value));
   

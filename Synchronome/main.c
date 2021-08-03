@@ -27,24 +27,27 @@
 #define NUM_CPU_CORES          (4)
 #define TRUE                   (1)
 #define FALSE                  (0)
-#define NUM_THREADS            (3)
+#define NUM_THREADS            (4)
                               
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
-int cpu_core[NUM_THREADS] = {1,2,2};
+int num_of_mallocs = 20;
+  
+int cpu_core[NUM_THREADS] = {1,1,2,2};
 // MQ - START
 
-extern char imagebuff[4096];
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
 
 extern unsigned char bigbuffer[(1280*960)];
 void *buffptr;
 
 unsigned char temp_g_buffer[614400];
-void *tempptr;
+//void *tempptr;
 
-extern unsigned char negativebuffer[(1280*960)];
+void *vpt[20];
+
+extern unsigned char negativebuffer[(1280*960)]; 
 void *buffptr_transform;
 
 extern void message_queue_setup();
@@ -56,8 +59,8 @@ int running_frequency = 30;
 struct timespec start_time_val;
 
 extern int abortTest;
-extern int abortS1, abortS2, abortS3;
-extern sem_t semS1, semS2, semS3;
+extern int abortS0, abortS1, abortS2, abortS3;
+extern sem_t semS0, semS1, semS2, semS3;
 extern double start_realtime;
 extern timer_t timer_1;
 extern struct itimerspec itime;
@@ -195,6 +198,7 @@ int main(int argc, char *argv[])
   printf("Using CPUS=%d from total available.\n", CPU_COUNT(&allcpuset));
 
   // initialize the sequencer semaphores
+  if (sem_init (&semS0, 0, 0)) { printf ("Failed to initialize S0 semaphore\n"); exit (-1); }
   if (sem_init (&semS1, 0, 0)) { printf ("Failed to initialize S1 semaphore\n"); exit (-1); }
   if (sem_init (&semS2, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
   if (sem_init (&semS3, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
@@ -259,41 +263,50 @@ int main(int argc, char *argv[])
   pthread_attr_setaffinity_np(&writeback_sched_attr, sizeof(cpu_set_t), &cpuset_wb);
   
   // Create Service threads which will block awaiting release for:
-
-  // Servcie_1 = RT_MAX-1	@ 20 Hz
+  
+  //Service_0
   rt_param[0].sched_priority=rt_max_prio-1;
   pthread_attr_setschedparam(&rt_sched_attr[0], &rt_param[0]);
-  rc=pthread_create(&threads[0],&rt_sched_attr[0], Service_1_frame_acquisition,(void *)&(threadParams[0]));
+  rc=pthread_create(&threads[0],&rt_sched_attr[0], Service_0_Sequencer,(void *)&(threadParams[0]));
+  if(rc < 0)
+      perror("pthread_create for service 0 - Sequencer\n");
+  else
+      printf("pthread_create successful for service 0\n");
+
+  // Servcie_1 = RT_MAX-1	@ 20 Hz
+  rt_param[1].sched_priority=rt_max_prio-2;
+  pthread_attr_setschedparam(&rt_sched_attr[1], &rt_param[1]);
+  rc=pthread_create(&threads[1],&rt_sched_attr[1], Service_1_frame_acquisition,(void *)&(threadParams[1]));
   if(rc < 0)
       perror("pthread_create for service 1 - V4L2 video frame acquisition");
   else
       printf("pthread_create successful for service 1\n");
       
   // Service_2 = RT_MAX-2	@ 10 Hz
-  rt_param[1].sched_priority=rt_max_prio-2;
-  pthread_attr_setschedparam(&rt_sched_attr[1], &rt_param[1]);
-  rc=pthread_create(&threads[1], &rt_sched_attr[1], Service_2_frame_process, (void *)&(threadParams[1]));
+  rt_param[2].sched_priority=rt_max_prio-3;
+  pthread_attr_setschedparam(&rt_sched_attr[2], &rt_param[2]);
+  rc=pthread_create(&threads[2], &rt_sched_attr[2], Service_2_frame_process, (void *)&(threadParams[2]));
   if(rc < 0)
       perror("pthread_create for service 2 - flash frame storage");
   else
       printf("pthread_create successful for service 2\n");
 
   // Service_3 = RT_MAX-3	@ 1 Hz
-  rt_param[2].sched_priority=rt_max_prio-3;
-  pthread_attr_setschedparam(&rt_sched_attr[2], &rt_param[2]);
-  rc=pthread_create(&threads[2], &rt_sched_attr[2], Service_3_frame_storage, (void *)&(threadParams[2]));
+  rt_param[3].sched_priority=rt_max_prio-4;
+  pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
+  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_frame_storage, (void *)&(threadParams[3]));
   if(rc < 0)
       perror("pthread_create for service 3 - flash frame storage");
   else
       printf("pthread_create successful for service 3\n");
 
-  writeback_threadparam.threadIdx = 5;
+  writeback_threadparam.threadIdx = 6;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
   //sleep(1);
   
   char c;
-  printf("\n\nShotgun mode\n\n");
+  printf("\n--------------------\nShotgun mode\n--------------------\n");
   c = getchar();
   printf("executed\n");
   putchar(c);
@@ -332,9 +345,19 @@ int main(int argc, char *argv[])
 
   message_queue_release();
   
+  for(int i = 0; i < num_of_mallocs; i++)
+  {
+     free(vpt[i]);
+     vpt[i] = NULL;
+  }
+  
   free(buffptr);
-  free(tempptr);
+  buffptr = NULL;
+  
+  //free(tempptr);
+  //tempptr = NULL;
   free(buffptr_transform);
+  buffptr_transform = NULL;
   
   printf("heap space memory freed\n");
   printf("CAMERA_TEST COMPLETE\n");
@@ -394,11 +417,24 @@ void set_sequencer_timer_interval()
 
 void init_variables()
 {
-  abortS1=FALSE; abortS2=FALSE; abortS3=FALSE;
+  abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE;
   seqCnt = 0;
   
+  num_of_mallocs = 20;
+  printf("Number of mallocs = %d\n",num_of_mallocs);
+  
+  for(int i = 0; i < num_of_mallocs; i++)
+  {
+    vpt[i] = (void *)malloc(sizeof(temp_g_buffer));
+    
+    if(NULL == vpt[i])
+    {
+      printf("Malloc failed at %d\n",i);
+    }
+  }
+  
+  //tempptr = (void *)malloc(sizeof(temp_g_buffer));
   buffptr = (void *)malloc(sizeof(bigbuffer));
-  tempptr = (void *)malloc(sizeof(temp_g_buffer));
   buffptr_transform = (void *)malloc(sizeof(negativebuffer));
   
   get_linux_details(); 

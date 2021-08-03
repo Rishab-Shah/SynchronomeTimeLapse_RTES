@@ -32,6 +32,7 @@
 #define MAX_MSG_SIZE	        (100)
 #define ERROR		              (-1)
 
+void *Service_0_Sequencer(void *threadp);
 void *Service_1_frame_acquisition(void *threadp);
 void *Service_2_frame_process(void *threadp);
 void *Service_3_frame_storage(void *threadp);

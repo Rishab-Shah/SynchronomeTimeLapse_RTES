@@ -33,7 +33,7 @@ enum io_method
 #define START_UP_FRAMES         (15)
 #define LAST_FRAMES             (1)
 #define WRITEBACK_FRAMES        (1800)
-#define CAPTURE_FRAMES          (WRITEBACK_FRAMES+LAST_FRAMES)
+#define CAPTURE_FRAMES          (WRITEBACK_FRAMES + LAST_FRAMES)
 #define FRAMES_TO_ACQUIRE       (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
 #define BUFF_LENGTH             (CAPTURE_FRAMES)
 #define COLOR_CONVERT_RGB       (1)
