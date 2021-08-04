@@ -33,6 +33,7 @@
 #define UNPROCESSED_FRAMES      (1)
 #define DRIVER_MMAP_BUFFERS     (6)
 
+extern int transform_on_off;
 extern unsigned char temp_g_buffer[614400];
 
 struct timespec frame_time;
@@ -362,16 +363,40 @@ void process_image(const void *p, int size)
 
 
     #if UNPROCESSED_FRAMES
-    for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
+    
+    
+    if(transform_on_off == 1)
     {
-      y_temp=(int)pptr[i]; u_temp=(int)pptr[i+1]; y2_temp=(int)pptr[i+2]; v_temp=(int)pptr[i+3];     
-      yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
-      yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
-      
-      negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
-      negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+      for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
+      {
+        y_temp=(int)pptr[i]; u_temp=(int)pptr[i+1]; y2_temp=(int)pptr[i+2]; v_temp=(int)pptr[i+3];     
+        yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
+        yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
+        
+        negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
+        negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+      }
+        
     }
+    else if(transform_on_off == 0)
+    {
+    
+      for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
+      {
+        y_temp=(int)pptr[i]; u_temp=(int)pptr[i+1]; y2_temp=(int)pptr[i+2]; v_temp=(int)pptr[i+3];     
+        yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
+        yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
+      }
+      
+      memcpy(negativebuffer,bigbuffer,sizeof(bigbuffer));
+    }
+    else
+    {
+      /* do nothing */
+    }
+
     #else
+    
     for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
     {
       printf("Does not execute\n");
@@ -381,7 +406,8 @@ void process_image(const void *p, int size)
       
       negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
       negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
-    }      
+    }   
+       
     #endif
 
 

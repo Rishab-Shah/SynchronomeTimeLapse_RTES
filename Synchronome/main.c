@@ -32,6 +32,7 @@
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
+int transform_on_off;
 int num_of_mallocs = 20;
   
 int cpu_core[NUM_THREADS] = {1,1,2,2};
@@ -118,25 +119,35 @@ char ppm_uname_string[UNAME_PATH_LENGTH];
 int main(int argc, char *argv[])
 {
   dev_name = "/dev/video0";
-  int compare = 0;
   
+  init_variables();
+
   //update later
-  if(argc > 2)
+  if(argc > 1)
   {
-    sscanf(argv[2], "%d", &compare);
-    if(compare == 10)
+    if((strcmp(argv[1],"high")) == 0)
     {
-      running_frequency = 3;
-      printf("Running Frequency = 10 Hz\n");
+      //running_frequency = 3;
+      printf("High running frequency\n");
     }
-    else if(compare == 1)
+    else if((strcmp(argv[1],"low")) == 0)
     {
-      running_frequency = 30;
-      printf("Running Frequency = 1 Hz\n");
+      //running_frequency = 30;
+      printf("Low running frequency\n");
+    }
+    else if((strcmp(argv[1],"N")) == 0)
+    {
+      //transform_on_off = 1;
+      printf("Negative transformation\n");
+    }
+    else if((strcmp(argv[1],"C")) == 0)
+    {
+      //transform_on_off = 0;
+      printf("Color transformation\n");
     }
     else
     {
-      printf("Running Frequency = 1 Hz\n");
+      /* do nothing */
     }
   }
   else if(argc < 2)
@@ -148,10 +159,7 @@ int main(int argc, char *argv[])
   {
     printf("else\n");
   }
-  
-  
-  init_variables();
-  
+
   message_queue_setup();
   
   struct timespec current_time_val, current_time_res;
@@ -294,12 +302,12 @@ int main(int argc, char *argv[])
   // Service_3 = RT_MAX-3	@ 1 Hz
   rt_param[3].sched_priority=rt_max_prio-4;
   pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
-  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_frame_storage, (void *)&(threadParams[3]));
+  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_transformation_on_off, (void *)&(threadParams[3]));
   if(rc < 0)
       perror("pthread_create for service 3 - flash frame storage");
   else
       printf("pthread_create successful for service 3\n");
-
+  
   writeback_threadparam.threadIdx = 6;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
@@ -345,11 +353,13 @@ int main(int argc, char *argv[])
 
   message_queue_release();
   
+  #if 0
   for(int i = 0; i < num_of_mallocs; i++)
   {
      free(vpt[i]);
      vpt[i] = NULL;
   }
+  #endif
   
   free(buffptr);
   buffptr = NULL;
@@ -421,8 +431,10 @@ void init_variables()
   seqCnt = 0;
   
   num_of_mallocs = 20;
+  transform_on_off = 1;
   printf("Number of mallocs = %d\n",num_of_mallocs);
   
+  #if 0
   for(int i = 0; i < num_of_mallocs; i++)
   {
     vpt[i] = (void *)malloc(sizeof(temp_g_buffer));
@@ -432,6 +444,7 @@ void init_variables()
       printf("Malloc failed at %d\n",i);
     }
   }
+  #endif
   
   //tempptr = (void *)malloc(sizeof(temp_g_buffer));
   buffptr = (void *)malloc(sizeof(bigbuffer));

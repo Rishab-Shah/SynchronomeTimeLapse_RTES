@@ -35,7 +35,7 @@
 void *Service_0_Sequencer(void *threadp);
 void *Service_1_frame_acquisition(void *threadp);
 void *Service_2_frame_process(void *threadp);
-void *Service_3_frame_storage(void *threadp);
+void *Service_3_transformation_on_off(void *threadp);
 void *writeback_dump(void *threadp);
 
 
