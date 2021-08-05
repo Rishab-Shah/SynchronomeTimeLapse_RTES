@@ -8,7 +8,10 @@ int service_turned_on = 0;
 extern void *vpt[20];
 
 //extern void *tempptr;
+#if 0
 extern unsigned char temp_g_buffer[614400];
+#endif
+extern unsigned char temp_g_buffer[20][614400];
 
 extern void *buffptr;
 extern unsigned char bigbuffer[(1280*960)];
@@ -27,13 +30,14 @@ mqd_t mymq2;
 struct mq_attr mq_attr3;
 mqd_t mymq3;
 
+extern int start_up_condition;
 
 extern int transform_on_off;
 extern int num_of_mallocs;
 
 
 extern int running_frequency;
-
+int incrementer;
 
 
 extern void process_transform(const void *p, int size);
@@ -158,7 +162,7 @@ void *Service_1_frame_acquisition(void *threadp)
   struct timespec current_time_val;
   double current_realtime;
   unsigned long long S1Cnt=0;
-  int incrementer = 0;
+
 
   // Start up processing and resource initialization
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
@@ -175,49 +179,63 @@ void *Service_1_frame_acquisition(void *threadp)
        
     mainloop(); // does only acquisition and memcpy to a buffer
     
-    //if()
-    //{
-      if(framecnt > -1)
-      { 
-        if(incrementer % (num_of_mallocs) == 0)
-        {
-          incrementer = 0;
-        }
-        
-        #if 0
-        memcpy(vpt[incrementer], temp_g_buffer,sizeof(temp_g_buffer));
-        memcpy(buffer, &vpt[incrementer], sizeof(void *));
-        incrementer++;
-        #endif
-  
-        #if 1
-        tempptr_s1 = (void *)malloc(sizeof(temp_g_buffer));
-        memcpy(tempptr_s1, temp_g_buffer,sizeof(temp_g_buffer));
-        memcpy(buffer, &tempptr_s1, sizeof(void *));
-        #endif
-        
-        memcpy(&(buffer[sizeof(void *)]), &framecnt, sizeof(int));  //global - one time in queue
-        memcpy(&(buffer[sizeof(void *) + sizeof(int)]), &frame_time, sizeof(struct timespec)); //global - one time in queue
+    if(framecnt > -1)
+    { 
+
+      //printf("incrementer = %d\n",incrementer);
+      //cb part here only as I have % implemented
       
-        /* send message with priority=30 */
-        if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
-        {
-          perror("Error::TX 1 Message\n");
-        }
-        else
-        {
-          //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
-        }
-      }
-    //}
+      
+      #if 1
+      //printf("size of value is ->%d\n",sizeof(temp_g_buffer[0]));
+      tempptr_s1 = (void *)malloc((614400*sizeof(unsigned char)));
+      memcpy(tempptr_s1, &temp_g_buffer[incrementer],(614400*sizeof(unsigned char)));
+      memcpy(buffer, &tempptr_s1, sizeof(void *));
+      incrementer++;
+      #endif
+      
+      #if 0
+      memcpy(vpt[incrementer], temp_g_buffer,sizeof(temp_g_buffer));
+      memcpy(buffer, &vpt[incrementer], sizeof(void *));
+      incrementer++;
+      #endif
+
+      #if 0
+      tempptr_s1 = (void *)malloc(sizeof(temp_g_buffer));
+      memcpy(tempptr_s1, temp_g_buffer,sizeof(temp_g_buffer));
+      memcpy(buffer, &tempptr_s1, sizeof(void *));
+      #endif
+      
+      memcpy(&(buffer[sizeof(void *)]), &framecnt, sizeof(int));  //global - one time in queue
+      memcpy(&(buffer[sizeof(void *) + sizeof(int)]), &frame_time, sizeof(struct timespec)); //global - one time in queue
     
+      clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
+      read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
+      syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
+        
+      /* send message with priority=30 */
+      if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
+      {
+        perror("Error::TX 1 Message\n");
+      }
+      else
+      {
+        //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
+      }
+      
+      framecnt++;
+      
+    }
+     
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
     
+    //printf("frames sent = %d\n",framecnt);
     /* 1 minutes +  15 frames for start up */
-    if(S1Cnt >= (WRITEBACK_FRAMES+START_UP_FRAMES) )
+    if(framecnt >= (WRITEBACK_FRAMES+1))
     {
+      //printf("executed end condition\n");
       abortS1=TRUE;
       abortTest = TRUE;
       
@@ -282,6 +300,10 @@ void *Service_2_frame_process(void *threadp)
     memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
 
     
+    clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
+    transform_time[framecnt] = dTime(ts_transform_stop, ts_transform_start);
+    syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[framecnt]);
+    
     /* send message with priority=30 */
     if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
     {
@@ -328,22 +350,22 @@ void process_frame(int *frame_no_to_transfer,struct timespec *st_frame_time_to_t
   }
   else
   {
+  
+    clock_gettime(CLOCK_MONOTONIC, &ts_transform_start);
+    
     //Extract the data from queue
     memcpy(&buffptr_rx, buffer_receive, (sizeof(void *)));
     memcpy(&l_frame_no_extract, &(buffer_receive[sizeof(void *)]), (sizeof(int)));
     memcpy(&l_st_timespec_extract, &(buffer_receive[sizeof(void *)+sizeof(int)]), (sizeof(struct timespec)));
     
     //timestamping - transformation time - either yuyv to rgb or yuyv to negative
-    clock_gettime(CLOCK_MONOTONIC, &ts_transform_start);
+
     process_image(buffptr_rx,614400);
-    clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
-    transform_time[framecnt] = dTime(ts_transform_stop, ts_transform_start);
-    syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[framecnt]);
+
     
     //
     free(buffptr_rx);
     buffptr_rx = NULL;
-      
     
     //For transfer
     *frame_no_to_transfer = l_frame_no_extract;
@@ -379,27 +401,28 @@ void *Service_3_transformation_on_off(void *threadp)
     {
       case 't':
       {
-        printf("case t executed\n");
+        //printf("case t executed\n");
         syslog(LOG_CRIT, "_EXE T CASE\n");
         transform_on_off = !transform_on_off;
         break;
       }
       case 's':
       {
-        printf("case s executed\n");
+        //printf("case s executed\n");
         syslog(LOG_CRIT, "_EXE S CASE\n");
-        //transform_on_off = 0;
+        start_up_condition = 1;
+
         break;
       }
       case 'q':
       {
-        printf("case q executed\n");
+        //printf("case q executed\n");
         syslog(LOG_CRIT, "_EXE Q CASE\n");
         break;
       }
       default :
       {
-        printf("detected - %c\n",check_info);
+        //printf("detected - %c\n",check_info);
       }
       
       //check_info = '\0';
@@ -460,6 +483,7 @@ void *writeback_dump(void *threadp)
       syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)); 
     }
     
+    //printf("Frames stored = %d\n",frames_stored);
     if(frames_stored == WRITEBACK_FRAMES)
     {
       abort_wb = TRUE;
@@ -495,6 +519,7 @@ int save_image(int *frame_stored)
     
     //timestamping - transformation time - either yuyv to rgb or yuyv to negative
     clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
+    
     #if COLOR_CONVERT_RGB
     dump_ppm(buffptr_rx_wb, ((614400*6)/4), l_frame_no_extract, &l_st_timespec_extract);
     #else

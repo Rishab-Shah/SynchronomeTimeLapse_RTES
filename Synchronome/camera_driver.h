@@ -30,9 +30,9 @@ enum io_method
   IO_METHOD_USERPTR,
 };
 
-#define START_UP_FRAMES         (15)
+#define START_UP_FRAMES         (1)
 #define LAST_FRAMES             (1)
-#define WRITEBACK_FRAMES        (60)
+#define WRITEBACK_FRAMES        (1800)
 #define CAPTURE_FRAMES          (WRITEBACK_FRAMES + LAST_FRAMES)
 #define FRAMES_TO_ACQUIRE       (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
 #define BUFF_LENGTH             (CAPTURE_FRAMES)

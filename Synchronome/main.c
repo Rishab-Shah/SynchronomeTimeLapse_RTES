@@ -32,10 +32,12 @@
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
+extern int incrementer;
+int start_up_condition;
 int transform_on_off;
 int num_of_mallocs = 20;
   
-int cpu_core[NUM_THREADS] = {1,1,2,2};
+int cpu_core[NUM_THREADS] = {1,2,2,2};
 // MQ - START
 
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
@@ -43,7 +45,7 @@ extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
 extern unsigned char bigbuffer[(1280*960)];
 void *buffptr;
 
-unsigned char temp_g_buffer[614400];
+unsigned char temp_g_buffer[20][614400];
 //void *tempptr;
 
 void *vpt[20];
@@ -286,7 +288,7 @@ int main(int argc, char *argv[])
   pthread_attr_setschedparam(&rt_sched_attr[1], &rt_param[1]);
   rc=pthread_create(&threads[1],&rt_sched_attr[1], Service_1_frame_acquisition,(void *)&(threadParams[1]));
   if(rc < 0)
-      perror("pthread_create for service 1 - V4L2 video frame acquisition");
+      perror("pthread_create for service 1 - V4L2 video frame acquisition\n");
   else
       printf("pthread_create successful for service 1\n");
       
@@ -295,7 +297,7 @@ int main(int argc, char *argv[])
   pthread_attr_setschedparam(&rt_sched_attr[2], &rt_param[2]);
   rc=pthread_create(&threads[2], &rt_sched_attr[2], Service_2_frame_process, (void *)&(threadParams[2]));
   if(rc < 0)
-      perror("pthread_create for service 2 - flash frame storage");
+      perror("pthread_create for service 2 - flash frame storage\n");
   else
       printf("pthread_create successful for service 2\n");
 
@@ -304,20 +306,24 @@ int main(int argc, char *argv[])
   pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
   rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_transformation_on_off, (void *)&(threadParams[3]));
   if(rc < 0)
-      perror("pthread_create for service 3 - flash frame storage");
+      perror("pthread_create for service 3 - transform on off\n");
   else
       printf("pthread_create successful for service 3\n");
+      
+  pthread_detach(threads[3]);
   
-  writeback_threadparam.threadIdx = 6;
+  writeback_threadparam.threadIdx = 7;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
   //sleep(1);
   
+  #if 0
   char c;
   printf("\n--------------------\nShotgun mode\n--------------------\n");
   c = getchar();
   printf("executed\n");
   putchar(c);
+  #endif
   
   set_sequencer_timer_interval();
   
@@ -430,8 +436,11 @@ void init_variables()
   abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE;
   seqCnt = 0;
   
+  incrementer = 0;
   num_of_mallocs = 20;
   transform_on_off = 1;
+  start_up_condition = 0;
+  
   printf("Number of mallocs = %d\n",num_of_mallocs);
   
   #if 0

@@ -33,8 +33,10 @@
 #define UNPROCESSED_FRAMES      (1)
 #define DRIVER_MMAP_BUFFERS     (6)
 
+extern int incrementer;
+extern int start_up_condition;
 extern int transform_on_off;
-extern unsigned char temp_g_buffer[614400];
+extern unsigned char temp_g_buffer[20][614400];
 
 struct timespec frame_time;
 
@@ -126,6 +128,19 @@ void negative_transformation(unsigned char *colored_r, unsigned char *colored_g,
 
 void mainloop(void)
 {
+
+  if(start_up_condition == 1)
+  {
+    framecnt = 0;
+    start_up_condition = 0;
+  }
+  
+  if(framecnt == 0) 
+  {
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+    fstart = (double)time_start.tv_sec + (double)time_start.tv_nsec / NANOSEC_PER_SEC;
+  }
+  
   fd_set fds;
   struct timeval tv;
   int rc;
@@ -157,6 +172,11 @@ void mainloop(void)
   }
   
   //start
+  
+  if(framecnt > -1) 
+  {
+    clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
+  }
             
   if(read_frame())
   {
@@ -186,12 +206,7 @@ int read_frame()
   struct v4l2_buffer buf;
   unsigned int i;
 
-  if(framecnt > -1) 
-  {
-    clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
-  }
-  
-  switch (io)
+  switch(io)
   {
     case IO_METHOD_MMAP:
     {
@@ -217,17 +232,22 @@ int read_frame()
       }
       
       assert(buf.index < n_buffers);
-              
+      
       //process_image(buffers[0].start, buffers[0].length);
-      framecnt++;
-      clock_gettime(CLOCK_REALTIME, &frame_time);
- 
+
+      //printf("frame count is %d\n",framecnt);
+      
       if(framecnt > -1) 
       {
-        memcpy((void *)&temp_g_buffer[0],buffers[buf.index].start,buf.bytesused);
-        clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
-        read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
-        syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
+        if(incrementer % (20) == 0)
+        {
+          incrementer = 0;
+        }
+      
+        clock_gettime(CLOCK_REALTIME, &frame_time);
+        
+        memcpy((void *)&temp_g_buffer[incrementer][0],buffers[buf.index].start,buf.bytesused);
+        
       }
       
       if(-1 == xioctl(fd, VIDIOC_QBUF, &buf))
@@ -347,11 +367,7 @@ void process_image(const void *p, int size)
  
   syslog(LOG_INFO,"frame %d: ",framecnt);
     
-  if(framecnt == 0) 
-  {
-    clock_gettime(CLOCK_MONOTONIC, &time_start);
-    fstart = (double)time_start.tv_sec + (double)time_start.tv_nsec / NANOSEC_PER_SEC;
-  }
+
 
 #ifdef DUMP_FRAMES	
 
@@ -517,14 +533,16 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
   strcat(ppm_header+36, ppm_uname_string);
   strcat(ppm_header+122, ""HRES_STR" "VRES_STR"\n255\n");
 
-  clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-  writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
-  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
+
   
   // subtract 1 from sizeof header because it includes the null terminator for the string
   written=write(dumpfd, ppm_header, sizeof(ppm_header)-1);
 
   total=0;
+  
+  clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
+  writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
+  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
 
   do
   {
@@ -534,7 +552,7 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
 
   clock_gettime(CLOCK_MONOTONIC, &time_now);
   fnow = (double)time_now.tv_sec + (double)time_now.tv_nsec / NANOSEC_PER_SEC;
-  syslog(LOG_INFO, "Frame_written_to_flash at %lf %d bytes\n", (fnow-fstart), total);
+  syslog(LOG_INFO, "Frame_written_to_flash %d at %lf %d bytes\n",framecnt, (fnow-fstart), total);
 
   close(dumpfd);
     
@@ -658,8 +676,8 @@ void print_analysis()
   }
   avg_time = sum/(CAPTURE_FRAMES-z);
   
-  syslog(LOG_INFO, "Total frames = %d frames, Average end_to_end_time time = %lf sec, Average end_to_end_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
-  syslog(LOG_INFO, "WCET - end_to_end_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
+  //syslog(LOG_INFO, "Total frames = %d frames, Average end_to_end_time time = %lf sec, Average end_to_end_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
+  //syslog(LOG_INFO, "WCET - end_to_end_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
   
   #if 0
   sum = 0;
