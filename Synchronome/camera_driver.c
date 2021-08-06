@@ -80,8 +80,8 @@ double writeback_time[BUFF_LENGTH];
 struct timespec ts_read_capture_start,ts_read_capture_stop;
 double read_capture_time[BUFF_LENGTH+1];
 /* end to end time */
-struct timespec ts_end_to_end_start,ts_end_to_end_stop;
-double end_to_end_time[BUFF_LENGTH];
+struct timespec ts_negative_transformation_time_start,ts_negative_transformation_time_stop;
+double negative_transformation_time[BUFF_LENGTH];
 
 double acq_to_tranform_time[BUFF_LENGTH];
 
@@ -121,26 +121,20 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
 void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time);
 void yuv2rgb_float(float y, float u, float v, unsigned char *r, unsigned char *g, unsigned char *b);
 void yuv2rgb(int y, int u, int v, unsigned char *r, unsigned char *g, unsigned char *b);
-#if 0
+
 void negative_transformation(unsigned char colored_r, unsigned char colored_g, unsigned char colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b);
-#endif
+#if 0
 void negative_transformation(unsigned char *colored_r, unsigned char *colored_g, unsigned char *colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b);
-
+#endif
 void mainloop(void)
-{
-
-  if(start_up_condition == 1)
-  {
-    framecnt = 0;
-    start_up_condition = 0;
-  }
-  
+{  
   if(framecnt == 0) 
   {
     clock_gettime(CLOCK_MONOTONIC, &time_start);
     fstart = (double)time_start.tv_sec + (double)time_start.tv_nsec / NANOSEC_PER_SEC;
   }
   
+
   fd_set fds;
   struct timeval tv;
   int rc;
@@ -172,11 +166,11 @@ void mainloop(void)
   }
   
   //start
-  
   if(framecnt > -1) 
   {
     clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
   }
+  
             
   if(read_frame())
   {
@@ -314,7 +308,7 @@ int read_frame()
 }
 
 
-#if 0
+#if 1
 //original
 #define SAT                   (255)
 void negative_transformation(unsigned char colored_r, unsigned char colored_g, unsigned char colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b)
@@ -326,6 +320,8 @@ void negative_transformation(unsigned char colored_r, unsigned char colored_g, u
 
 #endif
 
+
+#if 0
 #define SAT                   (255)
 void negative_transformation(unsigned char *colored_r, unsigned char *colored_g, unsigned char *colored_b,unsigned char *negative_r, unsigned char *negative_g, unsigned char *negative_b)
 {
@@ -334,6 +330,8 @@ void negative_transformation(unsigned char *colored_r, unsigned char *colored_g,
   *negative_b = SAT - *colored_b;
 }
 
+#endif
+
 void process_transform(const void *p, int size)
 {
   int i, newi;
@@ -341,10 +339,21 @@ void process_transform(const void *p, int size)
   
   if(fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
   {
-    for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
+    if(transform_on_off == 1)
     {
-      //negative_transformation((int)pptr[newi], (int)pptr[newi+1], (int)pptr[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
-      //negative_transformation((int)pptr[newi+3], (int)pptr[newi+4], (int)pptr[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+      for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
+      {
+        negative_transformation((int)pptr[newi], (int)pptr[newi+1], (int)pptr[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
+        negative_transformation((int)pptr[newi+3], (int)pptr[newi+4], (int)pptr[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+      }
+    }
+    else if(transform_on_off == 0)
+    {
+      memcpy((void *)&(negativebuffer[0]),p,sizeof(negativebuffer));
+    }
+    else
+    {
+      /* Do nothing */
     }
   }
   else
@@ -367,8 +376,6 @@ void process_image(const void *p, int size)
  
   syslog(LOG_INFO,"frame %d: ",framecnt);
     
-
-
 #ifdef DUMP_FRAMES	
 
   if(fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_YUYV)
@@ -380,7 +387,21 @@ void process_image(const void *p, int size)
 
     #if UNPROCESSED_FRAMES
     
+    for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
+    {
+      y_temp=(int)pptr[i]; u_temp=(int)pptr[i+1]; y2_temp=(int)pptr[i+2]; v_temp=(int)pptr[i+3];     
+      yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
+      yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
+      
+      //negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
+      //negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+    }
     
+    
+    
+    
+    
+    #if 0
     if(transform_on_off == 1)
     {
       for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
@@ -389,8 +410,8 @@ void process_image(const void *p, int size)
         yuv2rgb(y_temp, u_temp, v_temp, &bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2]);
         yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
         
-        negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
-        negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
+        //negative_transformation(&bigbuffer[newi], &bigbuffer[newi+1], &bigbuffer[newi+2],&negativebuffer[newi], &negativebuffer[newi+1], &negativebuffer[newi+2]);
+        //negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
       }
         
     }
@@ -404,13 +425,13 @@ void process_image(const void *p, int size)
         yuv2rgb(y2_temp, u_temp, v_temp, &bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5]);
       }
       
-      memcpy(negativebuffer,bigbuffer,sizeof(bigbuffer));
+      //memcpy(negativebuffer,bigbuffer,sizeof(bigbuffer));
     }
     else
     {
       /* do nothing */
     }
-
+    #endif
     #else
     
     for(i=0, newi=0; i<size; i=i+4, newi=newi+6)
@@ -608,7 +629,6 @@ void print_analysis()
   double sum = 0;
   double avg_time = 0;
   double temp_value = read_capture_time[n];
-  printf("Here I am \n");
   /* 1801 frames -1 required */
   for(int i = start; i<BUFF_LENGTH-1;i++ )
   {
@@ -620,7 +640,6 @@ void print_analysis()
     sum = sum + read_capture_time[i];
   }
   avg_time = sum/(CAPTURE_FRAMES-z);
-  printf("Here I terminate \n");
   syslog(LOG_INFO, "Total frames = %d frames, Average capture time = %lf sec, Average read_capture_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - read_capture_time %lf sec and %lf FPS\n",temp_value, (1/temp_value));
   
@@ -664,20 +683,20 @@ void print_analysis()
   /* end_to_end_time time */
   sum = 0;
   avg_time = 0;
-  temp_value = end_to_end_time[n];
+  temp_value = negative_transformation_time[n];
   for(int i = start; i<BUFF_LENGTH;i++ )
   {
-    if(temp_value < end_to_end_time[i])
+    if(temp_value < negative_transformation_time[i])
     {
-      temp_value = end_to_end_time[i];
+      temp_value = negative_transformation_time[i];
     }
     //printf("end_to_end_time:: %lf\n",end_to_end_time[i]);
-    sum = sum + end_to_end_time[i];
+    sum = sum + negative_transformation_time[i];
   }
   avg_time = sum/(CAPTURE_FRAMES-z);
   
-  //syslog(LOG_INFO, "Total frames = %d frames, Average end_to_end_time time = %lf sec, Average end_to_end_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
-  //syslog(LOG_INFO, "WCET - end_to_end_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
+  syslog(LOG_INFO, "Total frames = %d frames, Average negative_transformation_time time = %lf sec, Average negative_transformation_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
+  syslog(LOG_INFO, "WCET - negative_transformation_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
   
   #if 0
   sum = 0;

@@ -27,7 +27,7 @@
 #define NUM_CPU_CORES          (4)
 #define TRUE                   (1)
 #define FALSE                  (0)
-#define NUM_THREADS            (4)
+#define NUM_THREADS            (5)
                               
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
@@ -37,7 +37,7 @@ int start_up_condition;
 int transform_on_off;
 int num_of_mallocs = 20;
   
-int cpu_core[NUM_THREADS] = {1,2,2,2};
+int cpu_core[NUM_THREADS] = {1,1,2,2,2};
 // MQ - START
 
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
@@ -62,8 +62,8 @@ int running_frequency = 30;
 struct timespec start_time_val;
 
 extern int abortTest;
-extern int abortS0, abortS1, abortS2, abortS3;
-extern sem_t semS0, semS1, semS2, semS3;
+extern int abortS0, abortS1, abortS2, abortS3, abortS4;
+extern sem_t semS0, semS1, semS2, semS3, semS4;
 extern double start_realtime;
 extern timer_t timer_1;
 extern struct itimerspec itime;
@@ -211,7 +211,8 @@ int main(int argc, char *argv[])
   if (sem_init (&semS0, 0, 0)) { printf ("Failed to initialize S0 semaphore\n"); exit (-1); }
   if (sem_init (&semS1, 0, 0)) { printf ("Failed to initialize S1 semaphore\n"); exit (-1); }
   if (sem_init (&semS2, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
-  if (sem_init (&semS3, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
+  if (sem_init (&semS3, 0, 0)) { printf ("Failed to initialize S3 semaphore\n"); exit (-1); }
+  if (sem_init (&semS4, 0, 0)) { printf ("Failed to initialize S4 semaphore\n"); exit (-1); }
 
   mainpid = getpid();
 
@@ -249,14 +250,14 @@ int main(int argc, char *argv[])
     rc=pthread_attr_setschedpolicy(&rt_sched_attr[i], SCHED_FIFO);
     rc=pthread_attr_setaffinity_np(&rt_sched_attr[i], sizeof(cpu_set_t), &threadcpu);
 
-    rt_param[i].sched_priority=rt_max_prio-i;
-    pthread_attr_setschedparam(&rt_sched_attr[i], &rt_param[i]);
+    //rt_param[i].sched_priority=rt_max_prio-i;
+    //pthread_attr_setschedparam(&rt_sched_attr[i], &rt_param[i]);
 
     threadParams[i].threadIdx=i;
     print_scheduler();
   }
 
-  printf("Service threads will run on %d CPU cores\n", CPU_COUNT(&threadcpu));
+  printf("Service threads will run on %d CPU cores\n",CPU_COUNT(&threadcpu));
   
   //writeback
   cpu_set_t cpuset_wb;
@@ -274,7 +275,7 @@ int main(int argc, char *argv[])
   
   // Create Service threads which will block awaiting release for:
   
-  //Service_0
+  //Service_0 - sequencer
   rt_param[0].sched_priority=rt_max_prio-1;
   pthread_attr_setschedparam(&rt_sched_attr[0], &rt_param[0]);
   rc=pthread_create(&threads[0],&rt_sched_attr[0], Service_0_Sequencer,(void *)&(threadParams[0]));
@@ -283,7 +284,7 @@ int main(int argc, char *argv[])
   else
       printf("pthread_create successful for service 0\n");
 
-  // Servcie_1 = RT_MAX-1	@ 20 Hz
+  // Servcie_1 = Acqusition
   rt_param[1].sched_priority=rt_max_prio-2;
   pthread_attr_setschedparam(&rt_sched_attr[1], &rt_param[1]);
   rc=pthread_create(&threads[1],&rt_sched_attr[1], Service_1_frame_acquisition,(void *)&(threadParams[1]));
@@ -292,7 +293,7 @@ int main(int argc, char *argv[])
   else
       printf("pthread_create successful for service 1\n");
       
-  // Service_2 = RT_MAX-2	@ 10 Hz
+  // Service_2 = YUYV to RGB
   rt_param[2].sched_priority=rt_max_prio-3;
   pthread_attr_setschedparam(&rt_sched_attr[2], &rt_param[2]);
   rc=pthread_create(&threads[2], &rt_sched_attr[2], Service_2_frame_process, (void *)&(threadParams[2]));
@@ -301,18 +302,26 @@ int main(int argc, char *argv[])
   else
       printf("pthread_create successful for service 2\n");
 
-  // Service_3 = RT_MAX-3	@ 1 Hz
   rt_param[3].sched_priority=rt_max_prio-4;
   pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
-  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_transformation_on_off, (void *)&(threadParams[3]));
+  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_transformation_process, (void *)&(threadParams[3]));
+  if(rc < 0)
+      perror("pthread_create for service 4 - rgb to negative\n");
+  else
+      printf("pthread_create successful for service 4\n");
+      
+  // Service_3 = transform on/off
+  rt_param[4].sched_priority=rt_max_prio-5;
+  pthread_attr_setschedparam(&rt_sched_attr[4], &rt_param[4]);
+  rc=pthread_create(&threads[4], &rt_sched_attr[4], Service_4_transformation_on_off, (void *)&(threadParams[4]));
   if(rc < 0)
       perror("pthread_create for service 3 - transform on off\n");
   else
       printf("pthread_create successful for service 3\n");
-      
-  pthread_detach(threads[3]);
+  pthread_detach(threads[4]);
   
-  writeback_threadparam.threadIdx = 7;
+
+  writeback_threadparam.threadIdx = 8;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
   //sleep(1);
@@ -337,7 +346,7 @@ int main(int argc, char *argv[])
     {
       printf("joined thread %d\n", i);
     }
-  }  
+  }
    
   // writeback thread
   if((rc=pthread_join(writeback_thread, NULL) < 0))
@@ -433,7 +442,7 @@ void set_sequencer_timer_interval()
 
 void init_variables()
 {
-  abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE;
+  abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE; abortS4=FALSE;
   seqCnt = 0;
   
   incrementer = 0;
