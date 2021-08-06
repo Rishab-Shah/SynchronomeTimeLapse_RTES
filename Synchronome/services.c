@@ -156,7 +156,10 @@ void *Service_0_Sequencer(void *threadp)
     //syslog(LOG_CRIT, "S0_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S0Cnt, (current_realtime-start_realtime));
    
   }
-  //printf("service 0 - SEQEUENCER exited\n");
+  
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "S0_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S0Cnt, (current_realtime-start_realtime));
+  printf("service 0 - SEQEUENCER exited\n");
   // Resource shutdown here
   pthread_exit((void *)0);
 }
@@ -204,7 +207,11 @@ void *Service_1_frame_acquisition(void *threadp)
       
       #if 1
       //printf("size of value is ->%d\n",sizeof(temp_g_buffer[0]));
-      tempptr_s1 = (void *)malloc((614400*sizeof(unsigned char)));
+      tempptr_s1 = (void *)malloc((614400*sizeof(unsigned char)));  
+      if(tempptr_s1 == NULL)
+      {
+        printf("tempptr_s1 malloc failed - %d\n",framecnt);
+      }
       memcpy(tempptr_s1, &temp_g_buffer[incrementer],(614400*sizeof(unsigned char)));
       memcpy(buffer, &tempptr_s1, sizeof(void *));
       incrementer++;
@@ -256,12 +263,14 @@ void *Service_1_frame_acquisition(void *threadp)
       abortTest=TRUE;
       
       // on order of up to milliseconds of latency to get time
-      clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
+      //clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+      //syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
       sem_post(&semS1);
     } 
   }
 
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
   printf("service 1 - Service_1_frame_acquisition exited - %d\n",framecnt);
   // Resource shutdown here
   pthread_exit((void *)0);
@@ -303,7 +312,13 @@ void *Service_2_frame_process(void *threadp)
       
     //mq send
     #if 1 
-    buffptr_s2 = (void *)malloc(sizeof(bigbuffer));  
+    buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
+    
+    if(buffptr_s2 == NULL)
+    {
+      printf("buffptr_s2 malloc failed - %lld\n",S2Cnt);
+    }
+    
     memcpy(buffptr_s2, bigbuffer,sizeof(bigbuffer));
     memcpy(buffer_send, &buffptr_s2, sizeof(void *));
     #endif
@@ -341,13 +356,16 @@ void *Service_2_frame_process(void *threadp)
       printf("INSIDE::service 2 - Service_2_frame_process - %d\n",l_s2_frame_no_to_send);
       abortS2=TRUE;
         
-      clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S2_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime));
+      //clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+      //syslog(LOG_CRIT, "S2_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime));
       sem_post(&semS2);
     }
     #endif
     
   }
+  
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "S2_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime));
   printf("service 2 - Service_2_frame_process exited - %d\n",l_s2_frame_no_to_send);
   pthread_exit((void *)0);
 }
@@ -427,7 +445,12 @@ void *Service_3_transformation_process(void *threadp)
       
     //mq send
     #if 1 
-    buffptr_s3 = (void *)malloc(sizeof(negativebuffer));  
+    buffptr_s3 = (void *)malloc(sizeof(negativebuffer));
+    if(buffptr_s3 == NULL)
+    {
+      printf("buffptr_s3 malloc failed - %lld\n",S3Cnt);
+    }
+    
     memcpy(buffptr_s3, negativebuffer,sizeof(negativebuffer));
     memcpy(buffer_send, &buffptr_s3, sizeof(void *));
     #endif
@@ -466,6 +489,10 @@ void *Service_3_transformation_process(void *threadp)
     }
     #endif
   }
+  
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "S2_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
+  
   printf("service 3 Service_3_transformation_process - exited %d\n",l_s3_frame_no_to_send);
   pthread_exit((void *)0);
 }
@@ -554,6 +581,8 @@ void *writeback_dump(void *threadp)
     }
   }
   
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "WB_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime));
   printf("writeback exited - %d\n",frames_stored);
   pthread_exit((void *)0); 
 }
@@ -690,7 +719,8 @@ void *Service_4_transformation_on_off(void *threadp)
   {
     sem_wait(&semS4);
 
-    if(abortS3) break;
+    //s4
+    if(abortS4) break;
       S4Cnt++;
     
     check_info = getchar();
@@ -733,6 +763,8 @@ void *Service_4_transformation_on_off(void *threadp)
   }
   
   printf("service 4 Service_4_transformation_on_off exited\n");
+  clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+  syslog(LOG_CRIT, "S4_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S4Cnt, (current_realtime-start_realtime));
   pthread_exit((void *)0);
 }
 

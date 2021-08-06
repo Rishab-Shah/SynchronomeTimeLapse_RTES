@@ -129,12 +129,12 @@ int main(int argc, char *argv[])
   {
     if((strcmp(argv[1],"high")) == 0)
     {
-      //running_frequency = 3;
+      running_frequency = 3;
       printf("High running frequency\n");
     }
     else if((strcmp(argv[1],"low")) == 0)
     {
-      //running_frequency = 30;
+      running_frequency = 30;
       printf("Low running frequency\n");
     }
     else if((strcmp(argv[1],"N")) == 0)
@@ -445,12 +445,11 @@ void init_variables()
   abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE; abortS4=FALSE;
   seqCnt = 0;
   
+  running_frequency = 30;
   incrementer = 0;
   num_of_mallocs = 20;
   transform_on_off = 1;
   start_up_condition = 0;
-  
-  printf("Number of mallocs = %d\n",num_of_mallocs);
   
   #if 0
   for(int i = 0; i < num_of_mallocs; i++)
