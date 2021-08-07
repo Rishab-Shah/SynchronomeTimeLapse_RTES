@@ -39,18 +39,20 @@ enum io_method
 //#define FRAMES_TO_STORE         (18)
 
 //for 3 mins (10:1)
-//#define WRITEBACK_FRAMES        (1810)     //180 //s1 made use karto
-//#define FRAMES_TO_STORE         (180)
+#define WRITEBACK_FRAMES        (1810)     //180 //s1 made use karto
+#define FRAMES_TO_STORE         (180)
+
 
 
 // for  30 mins (10:1)
-#define WRITEBACK_FRAMES        (18010)  //1800
-#define FRAMES_TO_STORE         (1800)
-
+//#define WRITEBACK_FRAMES        (18010)  //1800
+//#define FRAMES_TO_STORE         (1800)
 
 // for 30 mins (1:1) 1hz
 //#define WRITEBACK_FRAMES        (1800)     //180 //s1 made use karto
 //#define FRAMES_TO_STORE         (1800)
+
+
 
 // for 3 mins (1:1) 1hz
 //#define WRITEBACK_FRAMES        (180)     //180 //s1 made use karto

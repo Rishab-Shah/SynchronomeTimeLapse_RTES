@@ -396,10 +396,6 @@ void process_image(const void *p, int size)
       //negative_transformation(&bigbuffer[newi+3], &bigbuffer[newi+4], &bigbuffer[newi+5],&negativebuffer[newi+3], &negativebuffer[newi+4], &negativebuffer[newi+5]);
     }
     
-    
-    
-    
-    
     #if 0
     if(transform_on_off == 1)
     {
@@ -561,8 +557,8 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
   total=0;
   
   clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-  writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
-  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[framecnt]);
+  writeback_time[tag] = dTime(ts_writeback_stop, ts_writeback_start);
+  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
 
   do
   {
@@ -603,6 +599,10 @@ void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
   written=write(dumpfd, pgm_header, sizeof(pgm_header)-1);
 
   total=0;
+  
+  clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
+  writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
+  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
 
   do
   {
@@ -624,7 +624,7 @@ void print_analysis()
   int start = 3;
   int z =2;
   
-  printf("Entered printing mode");
+  printf("Entered printing mode\n");
   /* read/capture time */
   double sum = 0;
   double avg_time = 0;
