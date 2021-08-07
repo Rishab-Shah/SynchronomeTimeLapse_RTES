@@ -72,18 +72,17 @@ unsigned char negativebuffer[(1280*960)];
 
 /* transformation time capturing */
 struct timespec ts_transform_start,ts_transform_stop;
-double transform_time[BUFF_LENGTH];
+//double transform_time[BUFF_LENGTH];
 /* writeback time capturing */
 struct timespec ts_writeback_start,ts_writeback_stop;
-double writeback_time[BUFF_LENGTH];
+//double writeback_time[BUFF_LENGTH];
 /* read frame from camera time capturing */
 struct timespec ts_read_capture_start,ts_read_capture_stop;
-double read_capture_time[BUFF_LENGTH+1];
+//double read_capture_time[BUFF_LENGTH+1];
 /* end to end time */
 struct timespec ts_negative_transformation_time_start,ts_negative_transformation_time_stop;
-double negative_transformation_time[BUFF_LENGTH];
+//double negative_transformation_time[BUFF_LENGTH];
 
-double acq_to_tranform_time[BUFF_LENGTH];
 
 
 void v4l2_frame_acquisition_initialization();
@@ -169,8 +168,7 @@ void mainloop(void)
   {
     clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
   }
-  
-            
+           
   if(read_frame())
   {
     //Some storing operation required.
@@ -225,10 +223,6 @@ int read_frame()
       }
       
       assert(buf.index < n_buffers);
-      
-      //process_image(buffers[0].start, buffers[0].length);
-
-      //printf("frame count is %d\n",framecnt);
       
       if(framecnt > -1) 
       {
@@ -557,8 +551,8 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
   total=0;
   
   clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-  writeback_time[tag] = dTime(ts_writeback_stop, ts_writeback_start);
-  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
+  //writeback_time[tag] = dTime(ts_writeback_stop, ts_writeback_start);
+  //syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
 
   do
   {
@@ -601,8 +595,8 @@ void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
   total=0;
   
   clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-  writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
-  syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
+  //writeback_time[framecnt] = dTime(ts_writeback_stop, ts_writeback_start);
+  //syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
 
   do
   {
@@ -620,6 +614,7 @@ void dump_pgm(const void *p, int size, unsigned int tag, struct timespec *time)
 
 void print_analysis()
 {
+#if 0
   int n = 2;
   int start = 3;
   int z =2;
@@ -716,7 +711,7 @@ void print_analysis()
   syslog(LOG_INFO, "Total frames = %d frames, Average acq_to_tranform_time time = %lf sec, Average acq_to_tranform_time Frame rate = %lf FPS\n",CAPTURE_FRAMES, (double)avg_time, ((double)(1/avg_time)));
   syslog(LOG_INFO, "WCET - acq_to_tranform_time %lf sec and FPS is %lf FPS\n",temp_value, (1/temp_value));
   #endif
-
+#endif
 }
 
 void start_capturing(void)

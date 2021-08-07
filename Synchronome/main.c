@@ -32,6 +32,8 @@
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
+
+int number_of_frames_to_store;
 int fre_10_to_1_hz;
 extern int incrementer;
 int start_up_condition;
@@ -109,10 +111,6 @@ extern int fd;
 ////////MAIN CHA PART /////////////////////
 extern int frame_count;
 char       *dev_name;
-//static int out_buf;
-//static int force_format = 1;
-//static enum io_method   io = IO_METHOD_USERPTR;
-//static enum io_method   io = IO_METHOD_READ;
 extern enum io_method io;
 #define UNAME_PATH_LENGTH   100
 char ppm_uname_string[UNAME_PATH_LENGTH];
@@ -127,35 +125,39 @@ int main(int argc, char *argv[])
 
   if(argc > 1)
   {
-    if((strcmp(argv[1],"HZ_1_OFF")) == 0)
+    if((strcmp(argv[1],"HZ_1_OFF_180")) == 0)
     {
       running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
       transform_on_off = 0;
+      number_of_frames_to_store = 180;
       printf("10 Hz to 1 Hz and color images as output\n");
       //exit(1);
     }
-    else if((strcmp(argv[1],"HZ_1_ON")) == 0)
+    else if((strcmp(argv[1],"HZ_1_ON_180")) == 0)
     {
       running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
       transform_on_off = 1;
+      number_of_frames_to_store = 180;
       printf("10 Hz to 1 Hz and negative images as output\n");
       //exit(1);
     }
-    else if((strcmp(argv[1],"HZ_10_OFF")) == 0)
+    else if((strcmp(argv[1],"HZ_10_OFF_1800")) == 0)
     {
       running_frequency = HZ_10;
       fre_10_to_1_hz = 0;
       transform_on_off = 0;
+      number_of_frames_to_store = 1800;
       printf("10 Hz everything and color images as output\n");
       //exit(1);
     }
-    else if((strcmp(argv[1],"HZ_10_ON")) == 0)
+    else if((strcmp(argv[1],"HZ_10_ON_1800")) == 0)
     {
       running_frequency = HZ_10;
       fre_10_to_1_hz = 0;
       transform_on_off = 1;
+      number_of_frames_to_store = 1800;
       printf("10 Hz everything and negative images as output\n");
       //exit(1);
     }
@@ -169,16 +171,21 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"help")) == 0)
     {
       printf("HELP\n");
-      printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF\n");
-      printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON\n");
-      printf("10 Hz everything and color images as output     -- sudo ./run HZ_10_OFF\n");
-      printf("10 Hz everything and negative images as output  -- sudo ./run HZ_10_ON\n");
+      printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_180\n");
+      printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_180\n");
+      printf("10 Hz everything and color images as output     -- sudo ./run HZ_10_OFF_1800\n");
+      printf("10 Hz everything and negative images as output  -- sudo ./run HZ_10_ON_1800\n");
+      exit(1);
+    }
+    else
+    {
+      printf("Please enter correct command\n");
       exit(1);
     }
   }
   else
   { 
-    printf("PLease enter an option. FOr more information enter sudo ./run help\n");
+    printf("Please enter an option.\n For more information enter sudo ./run help\n");
     exit(1);
   }
 
@@ -377,7 +384,7 @@ int main(int argc, char *argv[])
 #if CAMERA_1
   //shutdown of frame acquisition service
   v4l2_frame_acquisition_shutdown();
-  print_analysis();
+  //print_analysis();
   fprintf(stderr, "\n");
 #endif
 
@@ -490,7 +497,6 @@ void init_variables()
 void get_linux_details()
 {
   FILE *fp;
-  int status;
   char path[UNAME_PATH_LENGTH];
   
   strcpy(path,"");
@@ -505,16 +511,6 @@ void get_linux_details()
   
   strcpy(ppm_uname_string,"#");
   strncat(ppm_uname_string,path,strlen(path)); 
-  status = pclose(fp);
-  
-  if(status == -1)
-  {
-    /* Error reported by pclose() */
-  }
-  else
-  {
-    /* Use macros described under wait() to inspect `status' in order
-    to determine success/failure of command executed by popen() */
-  }
-  
+  pclose(fp);
+
 }
