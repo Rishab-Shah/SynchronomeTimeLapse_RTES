@@ -19,6 +19,12 @@
 
 
 
+#define COUNT_TO_LOAD       (33333333)
+#define HZ_HALF             (15)
+#define HZ_1                (30)
+#define HZ_10               (3)
+//#define HZ_30               (3)
+
 #define USEC_PER_MSEC       (1000)
 #define NANOSEC_PER_MSEC    (1000000.0)
 #define NANOSEC_PER_SEC     (1000000000.0)

@@ -97,7 +97,7 @@ void Sequencer(int id)
   
   sem_post(&semS0);
   
-    // received interval timer signal
+  // received interval timer signal
   if(abortTest)
   {
     // disable interval timer
@@ -149,13 +149,13 @@ void *Service_0_Sequencer(void *threadp)
     if((S0Cnt % running_frequency) == 0) sem_post(&semS3); 
        
     // Service_3 @ 1 Hz = 1 second
-    if((S0Cnt % 15) == 0) sem_post(&semS4); //
+    if((S0Cnt % HZ_HALF) == 0) sem_post(&semS4); //
        
     // Service_3 @ 1 Hz = 1 second
  
     // on order of up to milliseconds of latency to get time
-    //clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-    //syslog(LOG_CRIT, "S0_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S0Cnt, (current_realtime-start_realtime));
+    clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+    syslog(LOG_CRIT, "S0_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S0Cnt, (current_realtime-start_realtime));
    
   }
   
@@ -203,10 +203,6 @@ void *Service_1_frame_acquisition(void *threadp)
     
     if(framecnt > -1)
     { 
-
-      //printf("incrementer = %d\n",incrementer);
-      //cb part here only as I have % implemented
-      
       
       #if 1
       //printf("size of value is ->%d\n",sizeof(temp_g_buffer[0]));

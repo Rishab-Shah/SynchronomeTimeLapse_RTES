@@ -59,7 +59,7 @@ extern void message_queue_release();
 void get_linux_details();
 // MQ - END
 
-int running_frequency = 30;
+int running_frequency;
 struct timespec start_time_val;
 
 extern int abortTest;
@@ -125,38 +125,39 @@ int main(int argc, char *argv[])
   
   init_variables();
 
-  //update later
   if(argc > 1)
   {
-    /* everything 10 hz and negative (1:1)*/
-    if((strcmp(argv[1],"HON")) == 0)
+    if((strcmp(argv[1],"HZ_1_OFF")) == 0)
     {
-      transform_on_off = 1;
-      //simply sudo ./run HON
-      running_frequency = 3;
-      fre_10_to_1_hz = 0;
-      printf("10 Hz and ON\n");
-    }
-    /* everything 10 hz and no negative (1:1)*/
-    else if((strcmp(argv[1],"HOFF")) == 0)
-    {
-      transform_on_off = 0;
-      //simply sudo ./run HOFF
-      running_frequency = 3;
-      fre_10_to_1_hz = 0;
-      printf("10 Hz and OFF\n");
-    }
-    /* (10:1) */
-    else if((strcmp(argv[1],"high")) == 0)
-    {
-      running_frequency = 3;
+      running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
-      printf("10:1\n");
+      transform_on_off = 0;
+      printf("10 Hz to 1 Hz and color images as output\n");
+      //exit(1);
     }
-    else if((strcmp(argv[1],"low")) == 0)
+    else if((strcmp(argv[1],"HZ_1_ON")) == 0)
     {
-      running_frequency = 30;
-      printf("Low running frequency\n");
+      running_frequency = HZ_10;
+      fre_10_to_1_hz = 1;
+      transform_on_off = 1;
+      printf("10 Hz to 1 Hz and negative images as output\n");
+      //exit(1);
+    }
+    else if((strcmp(argv[1],"HZ_10_OFF")) == 0)
+    {
+      running_frequency = HZ_10;
+      fre_10_to_1_hz = 0;
+      transform_on_off = 0;
+      printf("10 Hz everything and color images as output\n");
+      //exit(1);
+    }
+    else if((strcmp(argv[1],"HZ_10_ON")) == 0)
+    {
+      running_frequency = HZ_10;
+      fre_10_to_1_hz = 0;
+      transform_on_off = 1;
+      printf("10 Hz everything and negative images as output\n");
+      //exit(1);
     }
     else if((strcmp(argv[1],"unlink")) == 0)
     {
@@ -165,19 +166,20 @@ int main(int argc, char *argv[])
       mq_unlink(SNDRCV_MQ_3);
       exit(1);
     }
-    else
+    else if((strcmp(argv[1],"help")) == 0)
     {
-      /* do nothing */
+      printf("HELP\n");
+      printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF\n");
+      printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON\n");
+      printf("10 Hz everything and color images as output     -- sudo ./run HZ_10_OFF\n");
+      printf("10 Hz everything and negative images as output  -- sudo ./run HZ_10_ON\n");
+      exit(1);
     }
   }
   else
-  {
-    //simply sudo ./run
-    //1:1 sampling
-    //comment to turn on transformation
-    transform_on_off = 1;
-    fre_10_to_1_hz = 0;
-    printf("else\n");
+  { 
+    printf("PLease enter an option. FOr more information enter sudo ./run help\n");
+    exit(1);
   }
 
   message_queue_setup();
@@ -340,20 +342,13 @@ int main(int argc, char *argv[])
       printf("pthread_create successful for service 4\n");
   pthread_detach(threads[4]); //getchar()
   
-
   writeback_threadparam.threadIdx = 8;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
   
+  printf("Sleep start\n");
   //sleep(1);
-  
-  #if 0
-  char c;
-  printf("\n--------------------\nShotgun mode\n--------------------\n");
-  c = getchar();
-  printf("executed\n");
-  putchar(c);
-  #endif
-  
+  printf("Sleep end\n");
+    
   set_sequencer_timer_interval();
   
   for(i=0;i<NUM_THREADS;i++)
@@ -452,9 +447,9 @@ void set_sequencer_timer_interval()
   
   /* arm the interval timer */
   itime.it_interval.tv_sec = 0;
-  itime.it_interval.tv_nsec = 33333333;
+  itime.it_interval.tv_nsec = COUNT_TO_LOAD;
   itime.it_value.tv_sec = 0;
-  itime.it_value.tv_nsec = 33333333;
+  itime.it_value.tv_nsec = COUNT_TO_LOAD;
   
   timer_settime(timer_1, flags, &itime, &last_itime);
 }
@@ -465,7 +460,7 @@ void init_variables()
   abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE; abortS4=FALSE;
   seqCnt = 0;
   
-  running_frequency = 30;
+  running_frequency = HZ_1;//1 hz
   incrementer = 0;
   num_of_mallocs = 20;
   transform_on_off = 1;
