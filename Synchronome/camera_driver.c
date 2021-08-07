@@ -134,7 +134,6 @@ void mainloop(void)
     fstart = (double)time_start.tv_sec + (double)time_start.tv_nsec / NANOSEC_PER_SEC;
   }
   
-
   fd_set fds;
   struct timeval tv;
   int rc;
@@ -625,6 +624,7 @@ void print_analysis()
   int start = 3;
   int z =2;
   
+  printf("Entered printing mode");
   /* read/capture time */
   double sum = 0;
   double avg_time = 0;

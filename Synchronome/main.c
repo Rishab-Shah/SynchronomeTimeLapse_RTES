@@ -32,11 +32,12 @@
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
+int fre_10_to_1_hz;
 extern int incrementer;
 int start_up_condition;
 int transform_on_off;
 int num_of_mallocs = 20;
-  
+
 int cpu_core[NUM_THREADS] = {1,1,2,2,2};
 // MQ - START
 
@@ -127,38 +128,55 @@ int main(int argc, char *argv[])
   //update later
   if(argc > 1)
   {
-    if((strcmp(argv[1],"high")) == 0)
+    /* everything 10 hz and negative (1:1)*/
+    if((strcmp(argv[1],"HON")) == 0)
+    {
+      transform_on_off = 1;
+      //simply sudo ./run HON
+      running_frequency = 3;
+      fre_10_to_1_hz = 0;
+      printf("10 Hz and ON\n");
+    }
+    /* everything 10 hz and no negative (1:1)*/
+    else if((strcmp(argv[1],"HOFF")) == 0)
+    {
+      transform_on_off = 0;
+      //simply sudo ./run HOFF
+      running_frequency = 3;
+      fre_10_to_1_hz = 0;
+      printf("10 Hz and OFF\n");
+    }
+    /* (10:1) */
+    else if((strcmp(argv[1],"high")) == 0)
     {
       running_frequency = 3;
-      printf("High running frequency\n");
+      fre_10_to_1_hz = 1;
+      printf("10:1\n");
     }
     else if((strcmp(argv[1],"low")) == 0)
     {
       running_frequency = 30;
       printf("Low running frequency\n");
     }
-    else if((strcmp(argv[1],"N")) == 0)
+    else if((strcmp(argv[1],"unlink")) == 0)
     {
-      //transform_on_off = 1;
-      printf("Negative transformation\n");
-    }
-    else if((strcmp(argv[1],"C")) == 0)
-    {
-      //transform_on_off = 0;
-      printf("Color transformation\n");
+      mq_unlink(SNDRCV_MQ);
+      mq_unlink(SNDRCV_MQ_2);
+      mq_unlink(SNDRCV_MQ_3);
+      exit(1);
     }
     else
     {
       /* do nothing */
     }
   }
-  else if(argc < 2)
-  {
-    printf("else if -> Running Frequency = 1 Hz\n");
-    /* Do nothing */
-  }
   else
   {
+    //simply sudo ./run
+    //1:1 sampling
+    //comment to turn on transformation
+    transform_on_off = 1;
+    fre_10_to_1_hz = 0;
     printf("else\n");
   }
 
@@ -301,6 +319,7 @@ int main(int argc, char *argv[])
       perror("pthread_create for service 2 - flash frame storage\n");
   else
       printf("pthread_create successful for service 2\n");
+  pthread_detach(threads[2]); //color
 
   rt_param[3].sched_priority=rt_max_prio-4;
   pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
@@ -308,7 +327,8 @@ int main(int argc, char *argv[])
   if(rc < 0)
       perror("pthread_create for service 4 - rgb to negative\n");
   else
-      printf("pthread_create successful for service 4\n");
+      printf("pthread_create successful for service 3\n");
+  pthread_detach(threads[3]); //transformation
       
   // Service_3 = transform on/off
   rt_param[4].sched_priority=rt_max_prio-5;
@@ -317,8 +337,8 @@ int main(int argc, char *argv[])
   if(rc < 0)
       perror("pthread_create for service 3 - transform on off\n");
   else
-      printf("pthread_create successful for service 3\n");
-  pthread_detach(threads[4]);
+      printf("pthread_create successful for service 4\n");
+  pthread_detach(threads[4]); //getchar()
   
 
   writeback_threadparam.threadIdx = 8;
@@ -450,6 +470,7 @@ void init_variables()
   num_of_mallocs = 20;
   transform_on_off = 1;
   start_up_condition = 0;
+  fre_10_to_1_hz = 1;
   
   #if 0
   for(int i = 0; i < num_of_mallocs; i++)
