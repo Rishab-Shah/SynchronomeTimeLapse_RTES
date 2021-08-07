@@ -18,7 +18,7 @@
 
 
 #include "main.h"
-#include "cbfifo.h"
+//#include "cbfifo.h"
 #include "camera_driver.h"
 #include "time_spec.h"
 #include "services.h"
@@ -109,8 +109,8 @@ extern int fd;
 ////////MAIN CHA PART /////////////////////
 extern int frame_count;
 char       *dev_name;
-static int out_buf;
-static int force_format = 1;
+//static int out_buf;
+//static int force_format = 1;
 //static enum io_method   io = IO_METHOD_USERPTR;
 //static enum io_method   io = IO_METHOD_READ;
 extern enum io_method io;
