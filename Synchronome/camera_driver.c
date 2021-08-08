@@ -223,20 +223,15 @@ int read_frame()
       }
       
       assert(buf.index < n_buffers);
-      
-      if(framecnt > -1) 
+
+      if(incrementer % (20) == 0)
       {
-        if(incrementer % (20) == 0)
-        {
-          incrementer = 0;
-        }
-      
-        clock_gettime(CLOCK_REALTIME, &frame_time);
-        
-        memcpy((void *)&temp_g_buffer[incrementer][0],buffers[buf.index].start,buf.bytesused);
-        
+        incrementer = 0;
       }
       
+      clock_gettime(CLOCK_REALTIME, &frame_time);
+      memcpy((void *)&temp_g_buffer[incrementer][0],buffers[buf.index].start,buf.bytesused);
+        
       if(-1 == xioctl(fd, VIDIOC_QBUF, &buf))
         errno_exit("VIDIOC_QBUF");
         
@@ -259,7 +254,7 @@ int read_frame()
         }
       }
       
-      process_image(buffers[0].start, buffers[0].length);
+      //process_image(buffers[0].start, buffers[0].length);
       break;
     }
 
@@ -290,7 +285,7 @@ int read_frame()
       
       assert(i < n_buffers);
       
-      process_image((void *)buf.m.userptr, buf.bytesused);
+      //sprocess_image((void *)buf.m.userptr, buf.bytesused);
       
       if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
       errno_exit("VIDIOC_QBUF");

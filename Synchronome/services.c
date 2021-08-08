@@ -191,8 +191,6 @@ void *Service_1_frame_acquisition(void *threadp)
     
     if(start_up_condition == 1)
     {
-      framecnt = 0;
-      start_up_condition = 0;
       S1Cnt = 0;
     } 
     
@@ -201,62 +199,46 @@ void *Service_1_frame_acquisition(void *threadp)
 
     mainloop(); // does only acquisition and memcpy to a buffer
     
-    if(framecnt > -1)
-    { 
-      #if 1
-      //printf("size of value is ->%d\n",sizeof(temp_g_buffer[0]));
-      tempptr_s1 = (void *)malloc((614400*sizeof(unsigned char)));  
-      if(tempptr_s1 == NULL)
-      {
-        printf("tempptr_s1 malloc failed - %d\n",framecnt);
-      }
-      
-      memcpy(tempptr_s1, &temp_g_buffer[incrementer],(614400*sizeof(unsigned char)));
-      memcpy(buffer, &tempptr_s1, sizeof(void *));
-      incrementer++;
-      #endif
+    //if(framecnt > -1)
+    //{ 
 
-      local_frame_no = framecnt;
-      
-      memcpy(&(buffer[sizeof(void *)]), &local_frame_no, sizeof(int));  //global - one time in queue
-      memcpy(&(buffer[sizeof(void *) + sizeof(int)]), &frame_time, sizeof(struct timespec)); //global - one time in queue
-    
-      clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
-      //read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
-      //syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
-        
-      /* send message with priority=30 */
-      if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
-      {
-        perror("Error::TX 1 Message\n");
-      }
-      else
-      {
-        //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
-      }
-      
-      framecnt++;
-      
+    //printf("size of value is ->%d\n",sizeof(temp_g_buffer[0]));
+    tempptr_s1 = (void *)malloc((614400*sizeof(unsigned char)));  
+    if(tempptr_s1 == NULL)
+    {
+      printf("tempptr_s1 malloc failed - %d\n",framecnt);
     }
+    
+    memcpy(tempptr_s1, &temp_g_buffer[incrementer],(614400*sizeof(unsigned char)));
+    memcpy(buffer, &tempptr_s1, sizeof(void *));
+    incrementer++;
+
+    local_frame_no = framecnt;
+    
+    memcpy(&(buffer[sizeof(void *)]), &local_frame_no, sizeof(int));  //global - one time in queue
+    memcpy(&(buffer[sizeof(void *) + sizeof(int)]), &frame_time, sizeof(struct timespec)); //global - one time in queue
+  
+    clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
+    //read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
+    //syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
+      
+    /* send message with priority=30 */
+    if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
+    {
+      perror("Error::TX 1 Message\n");
+    }
+    else
+    {
+      //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
+    }
+    
+    //framecnt++;
+      
+    //}
      
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
-    
-    /* 1 minutes +  15 frames for start up */
-    #if 0
-    if(framecnt >= (WRITEBACK_FRAMES+1))
-    {
-      //printf("INSIDE::executed end condition - %d\n",framecnt);
-      abortS1=TRUE;
-      abortTest=TRUE;
-      
-      // on order of up to milliseconds of latency to get time
-      //clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      //syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
-      sem_post(&semS1);
-    }
-    #endif
   }
 
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
@@ -286,6 +268,7 @@ void *Service_2_frame_process(void *threadp)
   int frame_no_to_send_1_1 = 0;
   int i = 0;
   int j = 0;
+  int start_sampling = 0;
 
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S2 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
@@ -303,98 +286,118 @@ void *Service_2_frame_process(void *threadp)
          
     //mq receive and process frame 
     process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
-    
-    
-   //if()
-   //{
-   //} 
-    
-    /* 10Hz to 1 Hz downsampling */
-    if(fre_10_to_1_hz == 1)
-    { 
-      //printf("for 10:1 hz\n"); 
-      if((i%5) == 0)
-      {
-        j++;
-        if(j == 2)
-        {   
-          //mq send 
-          #if 1 
-          buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
-  
-          if(buffptr_s2 == NULL)
-          {
-            printf("buffptr_s2 malloc failed - %lld\n",S2Cnt);
-          }
-          
-          memcpy(buffptr_s2, bigbuffer,sizeof(bigbuffer));
-          memcpy(buffer_send, &buffptr_s2, sizeof(void *));
-          #endif
-                  
-          memcpy(&(buffer_send[sizeof(void *)]), &temp_to_pass_forward, sizeof(int));
-          memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
       
-          clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
-          //transform_time[temp_to_pass_forward] = dTime(ts_transform_stop, ts_transform_start);
-          //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[temp_to_pass_forward]);
-          
-          /* send message with priority=30 */
-          if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
-          {
-            perror("Error::TX 2 Message\n");
-          }
-          else
-          {
-            //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
-          }
-          
-          j = 0;
-          temp_to_pass_forward++;
-          // on order of up to milliseconds of latency to get time
-          clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-          syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %d @ sec = %6.9lf\n", sched_getcpu(), temp_to_pass_forward, (current_realtime-start_realtime)); 
-        }
-      }
-    
-    i++;
-    }
-    else
+    if(start_up_condition == 1)
     {
-      /* for 1:1 sampling */
-      //printf("for 1:1\n");
-      //mq send
-      #if 1 
-      buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
+      start_sampling = 1;
       
-      if(buffptr_s2 == NULL)
+      /* For Human assist start */
+      if(fre_10_to_1_hz == 1)
       {
-        printf("buffptr_s2 malloc failed - %lld\n",S2Cnt);
-      }
-      
-      memcpy(buffptr_s2, bigbuffer,sizeof(bigbuffer));
-      memcpy(buffer_send, &buffptr_s2, sizeof(void *));
-      #endif
-           
-      memcpy(&(buffer_send[sizeof(void *)]), &frame_no_to_send_1_1, sizeof(int));
-      memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
-  
-      clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
-      //transform_time[frame_no_to_send_1_1] = dTime(ts_transform_stop, ts_transform_start);
-      //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[frame_no_to_send_1_1]);
-      
-      /* send message with priority=30 */
-      if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
-      {
-        perror("Error::TX 2 Message\n");
+        framecnt = 0;
       }
       else
       {
-        //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
+        framecnt = -1;
       }
-  
+      
+      //printf("Started\n");
       clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %d @ sec = %6.9lf\n", sched_getcpu(), frame_no_to_send_1_1, (current_realtime-start_realtime));
-      frame_no_to_send_1_1++; 
+      syslog(LOG_CRIT, "STARTED_SAMPLING at 10 Hz on core %d @ sec = %6.9lf\n", sched_getcpu(),(current_realtime-start_realtime)); 
+      start_up_condition = 0;
+    }    
+    
+    if(start_sampling == 1)
+    {
+      /* 10Hz to 1 Hz downsampling */
+      if(fre_10_to_1_hz == 1)
+      { 
+        /* Selecting 5th frame logic */
+        if((i%5) == 0)
+        {
+          j++;
+          
+          /* Selecting odd */
+          if(j == 2)
+          {   
+            //mq send 
+            buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
+    
+            if(buffptr_s2 == NULL)
+            {
+              printf("buffptr_s2 malloc failed - %lld\n",S2Cnt);
+            }
+            
+            memcpy(buffptr_s2, bigbuffer,sizeof(bigbuffer));
+            memcpy(buffer_send, &buffptr_s2, sizeof(void *));
+                     
+            memcpy(&(buffer_send[sizeof(void *)]), &temp_to_pass_forward, sizeof(int));
+            memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
+        
+            clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
+            //transform_time[temp_to_pass_forward] = dTime(ts_transform_stop, ts_transform_start);
+            //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[temp_to_pass_forward]);
+            
+            /* send message with priority=30 */
+            if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
+            {
+              perror("Error::TX 2 Message\n");
+            }
+            else
+            {
+              //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
+            }
+            
+            j = 0;
+            temp_to_pass_forward++;
+            // on order of up to milliseconds of latency to get time
+            clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+            syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %d @ sec = %6.9lf\n", sched_getcpu(), temp_to_pass_forward, (current_realtime-start_realtime)); 
+          }
+        }
+      
+        i++;
+      }
+      else
+      {
+        /* for 1:1 sampling */
+        //mq send
+        buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
+        
+        if(buffptr_s2 == NULL)
+        {
+          printf("buffptr_s2 malloc failed - %lld\n",S2Cnt);
+        }
+        
+        memcpy(buffptr_s2, bigbuffer,sizeof(bigbuffer));
+        memcpy(buffer_send, &buffptr_s2, sizeof(void *));
+             
+        memcpy(&(buffer_send[sizeof(void *)]), &frame_no_to_send_1_1, sizeof(int));
+        memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
+    
+        clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
+        //transform_time[frame_no_to_send_1_1] = dTime(ts_transform_stop, ts_transform_start);
+        //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[frame_no_to_send_1_1]);
+        
+        /* send message with priority=30 */
+        if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
+        {
+          perror("Error::TX 2 Message\n");
+        }
+        else
+        {
+          //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
+        }
+    
+        clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+        syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %d @ sec = %6.9lf\n", sched_getcpu(), frame_no_to_send_1_1, (current_realtime-start_realtime));
+        frame_no_to_send_1_1++; 
+      }
+      framecnt++;
+    }
+    else
+    {
+      /* do nothing printf("sampling not started\n"); */
     }
   }
   

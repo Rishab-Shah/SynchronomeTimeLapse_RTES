@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
       fre_10_to_1_hz = 0;
       transform_on_off = 0;
       number_of_frames_to_store = 1800;
-      printf("10 Hz everything and color images as output\n");
+      printf("10 Hz everything and color images as output - 1800\n");
       //exit(1);
     }
     else if((strcmp(argv[1],"HZ_10_ON_1800")) == 0)
@@ -158,7 +158,25 @@ int main(int argc, char *argv[])
       fre_10_to_1_hz = 0;
       transform_on_off = 1;
       number_of_frames_to_store = 1800;
-      printf("10 Hz everything and negative images as output\n");
+      printf("10 Hz everything and negative images as output - 1800\n");
+      //exit(1);
+    }
+    else if((strcmp(argv[1],"HZ_1_OFF_1800")) == 0)
+    {
+      running_frequency = HZ_10;
+      fre_10_to_1_hz = 1;
+      transform_on_off = 0;
+      number_of_frames_to_store = 1800;
+      printf("10 Hz to 1 Hz and negative images as output - 1800 \n");
+      //exit(1);
+    }
+    else if((strcmp(argv[1],"HZ_1_ON_1800")) == 0)
+    {
+      running_frequency = HZ_10;
+      fre_10_to_1_hz = 1;
+      transform_on_off = 1;
+      number_of_frames_to_store = 1800;
+      printf("10 Hz to 1 Hz and negative images as output - 1800\n");
       //exit(1);
     }
     else if((strcmp(argv[1],"unlink")) == 0)
@@ -175,6 +193,8 @@ int main(int argc, char *argv[])
       printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_180\n");
       printf("10 Hz everything and color images as output     -- sudo ./run HZ_10_OFF_1800\n");
       printf("10 Hz everything and negative images as output  -- sudo ./run HZ_10_ON_1800\n");
+      printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_1800\n");
+      printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_1800\n");
       exit(1);
     }
     else
@@ -215,9 +235,6 @@ int main(int argc, char *argv[])
   #if CAMERA_1
   v4l2_frame_acquisition_initialization();
   #endif
-
-  //required to get camera initialized and ready
-  //seq_frame_read();
 
   printf("Starting High Rate Sequencer Demo\n");
   clock_gettime(MY_CLOCK_TYPE, &start_time_val); start_realtime=realtime(&start_time_val);
@@ -268,7 +285,6 @@ int main(int argc, char *argv[])
   {
     // run ALL threads on core RT_CORE
     CPU_ZERO(&threadcpu);
-    //cpuidx=(RT_CORE);
     cpuidx = cpu_core[i];
     CPU_SET(cpuidx, &threadcpu);
 
@@ -276,9 +292,6 @@ int main(int argc, char *argv[])
     rc=pthread_attr_setinheritsched(&rt_sched_attr[i], PTHREAD_EXPLICIT_SCHED);
     rc=pthread_attr_setschedpolicy(&rt_sched_attr[i], SCHED_FIFO);
     rc=pthread_attr_setaffinity_np(&rt_sched_attr[i], sizeof(cpu_set_t), &threadcpu);
-
-    //rt_param[i].sched_priority=rt_max_prio-i;
-    //pthread_attr_setschedparam(&rt_sched_attr[i], &rt_param[i]);
 
     threadParams[i].threadIdx=i;
     print_scheduler();
@@ -351,11 +364,7 @@ int main(int argc, char *argv[])
   
   writeback_threadparam.threadIdx = 8;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
-  
-  printf("Sleep start\n");
-  //sleep(1);
-  printf("Sleep end\n");
-    
+      
   set_sequencer_timer_interval();
   
   for(i=0;i<NUM_THREADS;i++)
@@ -401,8 +410,6 @@ int main(int argc, char *argv[])
   free(buffptr);
   buffptr = NULL;
   
-  //free(tempptr);
-  //tempptr = NULL;
   free(buffptr_transform);
   buffptr_transform = NULL;
   

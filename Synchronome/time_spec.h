@@ -18,12 +18,19 @@
 #include <signal.h>
 
 
-
+#if 0
 #define COUNT_TO_LOAD       (33333333)
 #define HZ_HALF             (15)
 #define HZ_1                (30)
 #define HZ_10               (3)
-//#define HZ_30               (3)
+#endif
+
+#if 1
+#define COUNT_TO_LOAD       (10000000)
+#define HZ_HALF             (50)
+#define HZ_1                (100)
+#define HZ_10               (10)
+#endif
 
 #define USEC_PER_MSEC       (1000)
 #define NANOSEC_PER_MSEC    (1000000.0)
