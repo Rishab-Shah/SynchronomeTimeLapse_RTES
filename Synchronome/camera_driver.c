@@ -36,7 +36,7 @@
 extern int incrementer;
 extern int start_up_condition;
 extern int transform_on_off;
-extern unsigned char temp_g_buffer[20][614400];
+extern unsigned char temp_g_buffer[SIZEOF_RING][614400];
 
 struct timespec frame_time;
 
@@ -224,7 +224,7 @@ int read_frame()
       
       assert(buf.index < n_buffers);
 
-      if(incrementer % (20) == 0)
+      if(incrementer % (SIZEOF_RING) == 0)
       {
         incrementer = 0;
       }

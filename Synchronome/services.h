@@ -29,7 +29,7 @@
 #define SNDRCV_MQ_2           ("/send_receive_mq_image_2")
 #define SNDRCV_MQ_3           ("/send_receive_mq_image_3")
 
-#define MAX_MSG_SIZE	        (100)
+#define MAX_MSG_SIZE	        (300)
 #define ERROR		              (-1)
 
 void *Service_0_Sequencer(void *threadp);

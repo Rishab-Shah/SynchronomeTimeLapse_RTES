@@ -3,6 +3,9 @@
 extern int number_of_frames_to_store;
 extern int fre_10_to_1_hz;
 
+extern int freq_1_is_to_1;
+extern int fre_20_to_10_hz;
+
 void message_queue_setup();
 void message_queue_release();
 
@@ -13,7 +16,7 @@ extern void *vpt[20];
 #if 0
 extern unsigned char temp_g_buffer[614400];
 #endif
-extern unsigned char temp_g_buffer[20][614400];
+extern unsigned char temp_g_buffer[SIZEOF_RING][614400];
 
 extern void *buffptr;
 extern unsigned char bigbuffer[(1280*960)];
@@ -39,6 +42,7 @@ extern int num_of_mallocs;
 
 
 extern int running_frequency;
+extern int running_frequency_acquisition;
 int incrementer;
 
 
@@ -140,7 +144,7 @@ void *Service_0_Sequencer(void *threadp)
        
     // Release each service at a sub-rate of the generic sequencer rate
     //Service_1 @ 30 Hz = 33.33msec
-    if((S0Cnt % running_frequency) == 0) sem_post(&semS1); //1sec - > acquisitoin rate 0. (3Hz to 20 Hz for diff logic)
+    if((S0Cnt % running_frequency_acquisition) == 0) sem_post(&semS1); //1sec - > acquisitoin rate 0. (3Hz to 20 Hz for diff logic)
     
     // Service_2 @ 10 Hz = 100 msec
     //if((seqCnt % 45) == 0) sem_post(&semS2); //1.5 sec - to cause interruption to acq together sometime and sometimes not
@@ -199,10 +203,6 @@ void *Service_1_frame_acquisition(void *threadp)
 
     mainloop(); // does only acquisition and memcpy to a buffer
     
-    //if(framecnt > -1)
-    //{ 
-
-    //printf("size of value is ->%d\n",sizeof(temp_g_buffer[0]));
     tempptr_s1 = (void *)malloc((614400*sizeof(unsigned char)));  
     if(tempptr_s1 == NULL)
     {
@@ -231,11 +231,7 @@ void *Service_1_frame_acquisition(void *threadp)
     {
       //syslog(LOG_CRIT, "Service 1::Messages Sent to WB = %lld\n", S1Cnt);
     }
-    
-    //framecnt++;
-      
-    //}
-     
+  
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S1_SERVICE at 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
@@ -284,21 +280,33 @@ void *Service_2_frame_process(void *threadp)
     if(abortS2) break;
       S2Cnt++;
          
-    //mq receive and process frame 
-    process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
+    //mq receive and process frame
+    if(fre_20_to_10_hz == 1)
+    {
+      /* do nothing twice extract*/
+      process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
+      process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
+    } 
+    else
+    {
+      process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
+    }
       
     if(start_up_condition == 1)
     {
       start_sampling = 1;
+      printf("Start sampling \n");
       
       /* For Human assist start */
       if(fre_10_to_1_hz == 1)
       {
+        /* fix this value */
         framecnt = 0;
       }
       else
       {
-        framecnt = -1;
+        /* Need to determine experimentally for stability */
+        framecnt = -100;
       }
       
       //printf("Started\n");
@@ -310,8 +318,9 @@ void *Service_2_frame_process(void *threadp)
     if(start_sampling == 1)
     {
       /* 10Hz to 1 Hz downsampling */
-      if(fre_10_to_1_hz == 1)
+      if((framecnt >= 0) && (fre_10_to_1_hz == 1))
       { 
+        //printf("fre_10_to_1_hz sampling\n");
         /* Selecting 5th frame logic */
         if((i%5) == 0)
         {
@@ -358,8 +367,14 @@ void *Service_2_frame_process(void *threadp)
       
         i++;
       }
-      else
+      /* 10 Hz experiment for 20:10 sampling */
+      else if((framecnt >= 0) && (fre_20_to_10_hz == 1))
+      { 
+        printf("20:10 sampling\n");
+      }
+      else if((framecnt >= 0) && (freq_1_is_to_1 == 1))
       {
+        //printf("freq_1_is_to_1\n");
         /* for 1:1 sampling */
         //mq send
         buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
@@ -393,11 +408,18 @@ void *Service_2_frame_process(void *threadp)
         syslog(LOG_CRIT, "S2_SERVICE at  Hz on core %d for release %d @ sec = %6.9lf\n", sched_getcpu(), frame_no_to_send_1_1, (current_realtime-start_realtime));
         frame_no_to_send_1_1++; 
       }
+      else 
+      {
+        //printf("Why here?\n");
+        /* Do nothing */
+      }
+      
       framecnt++;
     }
     else
     {
-      /* do nothing printf("sampling not started\n"); */
+      /* do nothing */
+      //printf("sampling not started\n");
     }
   }
   
@@ -676,7 +698,7 @@ int save_image(int *frame_stored)
 void message_queue_setup()
 {
   /* setup common message q attributes - 1 */
-  mq_attr.mq_maxmsg = 100;
+  mq_attr.mq_maxmsg = MAX_MSG_SIZE;
   mq_attr.mq_msgsize = sizeof(void *)+sizeof(int)+sizeof(struct timespec);;
   
   mq_attr.mq_flags = 0;
@@ -693,7 +715,7 @@ void message_queue_setup()
   }
   
   /* setup common message q attributes  - 2 */
-  mq_attr2.mq_maxmsg = 100;
+  mq_attr2.mq_maxmsg = MAX_MSG_SIZE;
   mq_attr2.mq_msgsize = sizeof(void *)+sizeof(int)+sizeof(struct timespec);;
   
   mq_attr2.mq_flags = 0;
@@ -710,7 +732,7 @@ void message_queue_setup()
   }
   
   /* setup common message q attributes  - 3 */
-  mq_attr3.mq_maxmsg = 100;
+  mq_attr3.mq_maxmsg = MAX_MSG_SIZE;
   mq_attr3.mq_msgsize = sizeof(void *)+sizeof(int)+sizeof(struct timespec);
   
   mq_attr3.mq_flags = 0;

@@ -66,6 +66,7 @@ enum io_method
 #define FRAMES_TO_ACQUIRE       (CAPTURE_FRAMES + START_UP_FRAMES + LAST_FRAMES)
 #define BUFF_LENGTH             (CAPTURE_FRAMES)
 #define COLOR_CONVERT_RGB       (1)
+#define SIZEOF_RING             (40)
 
 void errno_exit(const char *s);
 

@@ -30,6 +30,7 @@
 #define HZ_HALF             (50)
 #define HZ_1                (100)
 #define HZ_10               (10)
+#define HZ_20               (5)
 #endif
 
 #define USEC_PER_MSEC       (1000)

@@ -33,6 +33,10 @@
 #define WRITEBACK_CORE         (3)
 
 
+int running_frequency_acquisition;
+int fre_20_to_10_hz;
+int freq_1_is_to_1;
+
 int number_of_frames_to_store;
 int fre_10_to_1_hz;
 extern int incrementer;
@@ -40,7 +44,7 @@ int start_up_condition;
 int transform_on_off;
 int num_of_mallocs = 20;
 
-int cpu_core[NUM_THREADS] = {1,1,2,2,2};
+int cpu_core[NUM_THREADS] = {1,1,1,2,2};
 // MQ - START
 
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
@@ -48,7 +52,7 @@ extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec 
 extern unsigned char bigbuffer[(1280*960)];
 void *buffptr;
 
-unsigned char temp_g_buffer[20][614400];
+unsigned char temp_g_buffer[SIZEOF_RING][614400];
 //void *tempptr;
 
 void *vpt[20];
@@ -125,57 +129,99 @@ int main(int argc, char *argv[])
 
   if(argc > 1)
   {
+    /* 10:1 */
     if((strcmp(argv[1],"HZ_1_OFF_180")) == 0)
     {
+      running_frequency_acquisition = HZ_10;
       running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
       transform_on_off = 0;
       number_of_frames_to_store = 180;
-      printf("10 Hz to 1 Hz and color images as output\n");
+      
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 0;
+      printf("10 Hz to 1 Hz and color images as output - 180\n");
       //exit(1);
     }
+    /* 10:1 */
     else if((strcmp(argv[1],"HZ_1_ON_180")) == 0)
     {
+      running_frequency_acquisition = HZ_10;
       running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
       transform_on_off = 1;
       number_of_frames_to_store = 180;
-      printf("10 Hz to 1 Hz and negative images as output\n");
+      
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 0;
+      printf("10 Hz to 1 Hz and negative images as output - 180\n");
       //exit(1);
     }
+    /* 1:1 */
     else if((strcmp(argv[1],"HZ_10_OFF_1800")) == 0)
     {
+      running_frequency_acquisition = HZ_10;
       running_frequency = HZ_10;
       fre_10_to_1_hz = 0;
       transform_on_off = 0;
       number_of_frames_to_store = 1800;
+      
+      freq_1_is_to_1 = 1;
+      fre_20_to_10_hz = 0;
       printf("10 Hz everything and color images as output - 1800\n");
       //exit(1);
     }
+    /* 1:1 */
     else if((strcmp(argv[1],"HZ_10_ON_1800")) == 0)
     {
+      running_frequency_acquisition = HZ_10;
       running_frequency = HZ_10;
       fre_10_to_1_hz = 0;
       transform_on_off = 1;
       number_of_frames_to_store = 1800;
+      
+      freq_1_is_to_1 = 1;
+      fre_20_to_10_hz = 0;
       printf("10 Hz everything and negative images as output - 1800\n");
       //exit(1);
     }
+    /* 10:1 */
     else if((strcmp(argv[1],"HZ_1_OFF_1800")) == 0)
     {
+      running_frequency_acquisition = HZ_10;
       running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
       transform_on_off = 0;
       number_of_frames_to_store = 1800;
+      
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 0;
       printf("10 Hz to 1 Hz and negative images as output - 1800 \n");
       //exit(1);
     }
+    /* 10:1 */
     else if((strcmp(argv[1],"HZ_1_ON_1800")) == 0)
     {
+      running_frequency_acquisition = HZ_10;
       running_frequency = HZ_10;
       fre_10_to_1_hz = 1;
       transform_on_off = 1;
       number_of_frames_to_store = 1800;
+      
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 0;
+      printf("10 Hz to 1 Hz and negative images as output - 1800\n");
+      //exit(1);
+    }
+    else if((strcmp(argv[1],"EXP")) == 0)
+    {
+      running_frequency_acquisition = HZ_20;
+      running_frequency = HZ_10;
+      fre_10_to_1_hz = 0;
+      transform_on_off = 1;
+      number_of_frames_to_store = 60;
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 1;
       printf("10 Hz to 1 Hz and negative images as output - 1800\n");
       //exit(1);
     }
@@ -189,8 +235,8 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"help")) == 0)
     {
       printf("HELP\n");
-      printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_180\n");
-      printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_180\n");
+      printf("DEMO::10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_180\n");
+      printf("DEMO::10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_180\n");
       printf("10 Hz everything and color images as output     -- sudo ./run HZ_10_OFF_1800\n");
       printf("10 Hz everything and negative images as output  -- sudo ./run HZ_10_ON_1800\n");
       printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_1800\n");
