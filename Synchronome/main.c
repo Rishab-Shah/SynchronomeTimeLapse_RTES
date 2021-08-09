@@ -216,13 +216,13 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"EXP")) == 0)
     {
       running_frequency_acquisition = HZ_20;
-      running_frequency = HZ_20;
+      running_frequency = HZ_10;
       
       fre_10_to_1_hz = 0;
       transform_on_off = 1;
       number_of_frames_to_store = 1800;
-      freq_1_is_to_1 = 1;
-      fre_20_to_10_hz = 0;
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 1;
       printf("20 Hz to 10 Hz and negative images as output - 1800\n");
       //exit(1);
     }
@@ -460,7 +460,6 @@ int main(int argc, char *argv[])
   free(buffptr_transform);
   buffptr_transform = NULL;
   
-  printf("heap space memory freed\n");
   printf("CAMERA_TEST COMPLETE\n");
   
   return 0;

@@ -21,6 +21,9 @@ extern unsigned char temp_g_buffer[SIZEOF_RING][614400];
 extern void *buffptr;
 extern unsigned char bigbuffer[(1280*960)];
 
+unsigned char cal_buffer[2][(1280*960)];
+unsigned char buffer_forward[(1280*960)];
+
 extern void *buffptr_transform;
 extern unsigned char negativebuffer[(1280*960)];
 
@@ -171,7 +174,7 @@ void *Service_0_Sequencer(void *threadp)
   
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S0_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S0Cnt, (current_realtime-start_realtime));
-  printf("service 0 - SEQEUENCER exited\n");
+  //printf("service 0 - SEQEUENCER exited\n");
   // Resource shutdown here
   pthread_exit((void *)0);
 }
@@ -245,7 +248,7 @@ void *Service_1_frame_acquisition(void *threadp)
 
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S1_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S1Cnt, (current_realtime-start_realtime));
-  printf("service 1 - Service_1_frame_acquisition exited - %d\n",framecnt);
+  //printf("service 1 - Service_1_frame_acquisition exited - %d\n",framecnt);
   // Resource shutdown here
   pthread_exit((void *)0);
 }
@@ -258,6 +261,7 @@ void *Service_2_frame_process(void *threadp)
   char buffer_send[sizeof(void *)+sizeof(int)+sizeof(struct timespec)];
   int nbytes;
   void *buffptr_s2;
+  unsigned char *pptr[2];
   
   //receive part
   int l_s2_frame_no_to_send;
@@ -271,6 +275,10 @@ void *Service_2_frame_process(void *threadp)
   int i = 0;
   int j = 0;
   int start_sampling = 0;
+  int pix1;
+  int pix0;
+  unsigned char *selected_bufpointer;
+  int sel;
 
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S2 thread @ sec=%6.9lf\n", current_realtime-start_realtime);
@@ -291,7 +299,11 @@ void *Service_2_frame_process(void *threadp)
     {
       /* do nothing twice extract*/
       process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
+      //copy 1
+      memcpy(cal_buffer[0],bigbuffer,sizeof(bigbuffer));
       process_frame(&l_s2_frame_no_to_send,&l_s2_st_frame_time_to_send);
+      memcpy(cal_buffer[1],bigbuffer,sizeof(bigbuffer));
+      //copy 2
     } 
     else
     {
@@ -301,7 +313,7 @@ void *Service_2_frame_process(void *threadp)
     if(start_up_condition == 1)
     {
       start_sampling = 1;
-      printf("Start sampling \n");
+      printf("Started sampling\n");
       
       /* For Human assist start */
       if(fre_10_to_1_hz == 1)
@@ -313,7 +325,7 @@ void *Service_2_frame_process(void *threadp)
       {
         /* Need to determine experimentally for stability */
         //framecnt = -100; // used in code for demo (10 HZ 1:1)
-        framecnt = -600;
+        framecnt = -100;
       }
       
       //printf("Started\n");
@@ -377,12 +389,72 @@ void *Service_2_frame_process(void *threadp)
       /* 10 Hz experiment for 20:10 sampling */
       else if((framecnt >= 0) && (fre_20_to_10_hz == 1))
       { 
-        printf("20:10 sampling\n");
+        //printf("20:10 sampling\n");
+        
+        //Logic start 
+        pptr[0] = (unsigned char*)&(cal_buffer[0]);
+        pptr[1] = (unsigned char*)&(cal_buffer[1]);
+           
+        for(int traverse = 0 ; traverse < sizeof(bigbuffer); traverse++)
+        {
+          abs(pptr[1][traverse] - pptr[0][traverse]) > 100 ? (pix1 = pix1 + 1) : 0;
+          abs(pptr[0][traverse] - buffer_forward[traverse]) > 100 ? (pix0 = pix0 + 1) : 0;
+        }
+        
+        if(pix1 > pix0)
+        {
+          sel = 1;
+          selected_bufpointer = pptr[1];
+        }
+        else
+        {
+          sel = 0;
+          selected_bufpointer = pptr[0];
+        }
+        
+        memcpy(buffer_forward,selected_bufpointer,sizeof(bigbuffer));
+        
+        syslog(LOG_CRIT, "PIX_0_individual is %d and frame ref is %d selection is %d\n", pix0,framecnt,sel);
+        syslog(LOG_CRIT, "PIX_1_individual is %d and frame ref is %d selection is %d\n", pix1,framecnt,sel);
+        
+        //Logic end
+        //mq send 
+        buffptr_s2 = (void *)malloc(sizeof(buffer_forward)); 
+
+        if(buffptr_s2 == NULL)
+        {
+          printf("buffptr_s2 malloc failed - %lld\n",S2Cnt);
+        }
+        
+        memcpy(buffptr_s2, buffer_forward,sizeof(buffer_forward));
+        memcpy(buffer_send, &buffptr_s2, sizeof(void *));
+                 
+        memcpy(&(buffer_send[sizeof(void *)]), &temp_to_pass_forward, sizeof(int));
+        memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
+    
+        clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
+        transform_time = dTime(ts_transform_stop, ts_transform_start);
+        syslog(LOG_INFO, "transform_time_test individual is %Lf\n", transform_time);
+        
+        /* send message with priority=30 */
+        if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
+        {
+          perror("Error::TX 2 Message\n");
+        }
+        else
+        {
+          //syslog(LOG_CRIT, "Service 2::Messages Sent to 3 = %lld\n", S2Cnt);
+        }
+        
+        temp_to_pass_forward++;
+        // on order of up to milliseconds of latency to get time
+        clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
+        syslog(LOG_CRIT, "S2_TEST at  Hz on core %d for release %d @ sec = %6.9lf\n", sched_getcpu(), temp_to_pass_forward, (current_realtime-start_realtime)); 
 
       }
       else if((framecnt >= 0) && (freq_1_is_to_1 == 1))
       {
-        //printf("freq_1_is_to_1\n");
+        printf("freq_1_is_to_1\n");
         /* for 1:1 sampling */
         //mq send
         buffptr_s2 = (void *)malloc(sizeof(bigbuffer)); 
@@ -433,7 +505,7 @@ void *Service_2_frame_process(void *threadp)
   
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S2_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S2Cnt, (current_realtime-start_realtime));
-  printf("service 2 - Service_2_frame_process exited - %d\n",l_s2_frame_no_to_send);
+  //printf("service 2 - Service_2_frame_process exited - %d\n",l_s2_frame_no_to_send);
   pthread_exit((void *)0);
 }
 
@@ -550,7 +622,7 @@ void *Service_3_transformation_process(void *threadp)
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "S2_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
   
-  printf("service 3 Service_3_transformation_process - exited %d\n",l_s3_frame_no_to_send);
+  //printf("service 3 Service_3_transformation_process - exited %d\n",l_s3_frame_no_to_send);
   pthread_exit((void *)0);
 }
 
@@ -635,7 +707,6 @@ void *writeback_dump(void *threadp)
     //if(frames_stored >= (WRITEBACK_FRAMES))
     if(frames_stored >= (number_of_frames_to_store))
     {
-      printf("Entered - %d\n",frames_stored);
       abort_wb = TRUE;
       abortTest = TRUE;
     }
@@ -643,7 +714,7 @@ void *writeback_dump(void *threadp)
   
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
   syslog(LOG_CRIT, "WB_ENDS 1 Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime));
-  printf("writeback exited - %d\n",frames_stored);
+  //printf("writeback exited - %d\n",frames_stored);
   pthread_exit((void *)0); 
 }
 

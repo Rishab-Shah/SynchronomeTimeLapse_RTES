@@ -285,7 +285,7 @@ int read_frame()
       
       assert(i < n_buffers);
       
-      //sprocess_image((void *)buf.m.userptr, buf.bytesused);
+      //process_image((void *)buf.m.userptr, buf.bytesused);
       
       if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
       errno_exit("VIDIOC_QBUF");
