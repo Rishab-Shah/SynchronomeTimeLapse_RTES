@@ -71,7 +71,13 @@ void Sequencer(int id);
 
 extern void mainloop(void);
 
-//timestmap
+//timestamps for excel
+long double writeback_time = 0;
+long double negative_transformation_time = 0;
+long double read_capture_time = 0;
+long double transform_time = 0;
+
+
 /* writeback time capturing */
 extern struct timespec ts_writeback_start,ts_writeback_stop;
 //extern double writeback_time[BUFF_LENGTH];
@@ -86,7 +92,7 @@ extern struct timespec ts_read_capture_start,ts_read_capture_stop;
 //extern double read_capture_time[BUFF_LENGTH+1];
 /* Negative transforamtion time */
 extern struct timespec ts_negative_transformation_time_start,ts_negative_transformation_time_stop;
-extern double negative_transformation_time[BUFF_LENGTH];
+//extern double negative_transformation_time[BUFF_LENGTH];
 //funtion prototype (non service)
 
 void process_negative_frame(int *frame_no_to_transfer,struct timespec *st_frame_time_to_transfer);
@@ -219,8 +225,8 @@ void *Service_1_frame_acquisition(void *threadp)
     memcpy(&(buffer[sizeof(void *) + sizeof(int)]), &frame_time, sizeof(struct timespec)); //global - one time in queue
   
     clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_stop);
-    //read_capture_time[framecnt] = dTime(ts_read_capture_stop, ts_read_capture_start);
-    //syslog(LOG_INFO, "read_capture_time individual is %lf\n", read_capture_time[framecnt]);
+    read_capture_time = dTime(ts_read_capture_stop, ts_read_capture_start);
+    syslog(LOG_INFO, "read_capture_time individual is %Lf\n", read_capture_time);
       
     /* send message with priority=30 */
     if((nbytes = mq_send(mymq, buffer, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
@@ -306,7 +312,8 @@ void *Service_2_frame_process(void *threadp)
       else
       {
         /* Need to determine experimentally for stability */
-        framecnt = -100;
+        //framecnt = -100; // used in code for demo (10 HZ 1:1)
+        framecnt = -600;
       }
       
       //printf("Started\n");
@@ -344,8 +351,8 @@ void *Service_2_frame_process(void *threadp)
             memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
         
             clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
-            //transform_time[temp_to_pass_forward] = dTime(ts_transform_stop, ts_transform_start);
-            //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[temp_to_pass_forward]);
+            transform_time = dTime(ts_transform_stop, ts_transform_start);
+            syslog(LOG_INFO, "transform_time individual is %Lf\n", transform_time);
             
             /* send message with priority=30 */
             if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
@@ -371,6 +378,7 @@ void *Service_2_frame_process(void *threadp)
       else if((framecnt >= 0) && (fre_20_to_10_hz == 1))
       { 
         printf("20:10 sampling\n");
+
       }
       else if((framecnt >= 0) && (freq_1_is_to_1 == 1))
       {
@@ -391,8 +399,8 @@ void *Service_2_frame_process(void *threadp)
         memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s2_st_frame_time_to_send, sizeof(struct timespec));
     
         clock_gettime(CLOCK_MONOTONIC, &ts_transform_stop);
-        //transform_time[frame_no_to_send_1_1] = dTime(ts_transform_stop, ts_transform_start);
-        //syslog(LOG_INFO, "transform_time individual is %lf\n", transform_time[frame_no_to_send_1_1]);
+        transform_time = dTime(ts_transform_stop, ts_transform_start);
+        syslog(LOG_INFO, "transform_time individual is %Lf\n", transform_time);
         
         /* send message with priority=30 */
         if((nbytes = mq_send(mymq2, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
@@ -520,8 +528,8 @@ void *Service_3_transformation_process(void *threadp)
     memcpy(&(buffer_send[sizeof(void *) + sizeof(int)]), &l_s3_st_frame_time_to_send, sizeof(struct timespec));
     
     clock_gettime(CLOCK_MONOTONIC, &ts_negative_transformation_time_stop);
-    //transform_time[l_s3_frame_no_to_send] = dTime(ts_negative_transformation_time_stop, ts_negative_transformation_time_start);
-    //syslog(LOG_INFO, "negative_transformation_time individual is %lf\n", negative_transformation_time[l_s3_frame_no_to_send]);
+    negative_transformation_time = dTime(ts_negative_transformation_time_stop, ts_negative_transformation_time_start);
+    syslog(LOG_INFO, "negative_transformation_time individual is %Lf\n", negative_transformation_time);
     
     /* send message with priority=30 */
     if((nbytes = mq_send(mymq3, buffer_send, (size_t)(sizeof(void *)+sizeof(int)+sizeof(struct timespec)), 30)) == ERROR)
@@ -536,19 +544,7 @@ void *Service_3_transformation_process(void *threadp)
     // on order of up to milliseconds of latency to get time
     clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
     syslog(LOG_CRIT, "S3_SERVICE at Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime)); 
-    //printf("service 3 Service_3_transformation_process - %d\n",l_s3_frame_no_to_send);
-    #if 0
-    if(l_s3_frame_no_to_send >= (WRITEBACK_FRAMES))
-    {
-      printf("INSIDE::service 3 Service_3_transformation_process - %d\n",l_s3_frame_no_to_send);
-      abortS3=TRUE;
-        
-      //on order of up to milliseconds of latency to get time
-      clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
-      syslog(LOG_CRIT, "S3_ENDS  Hz on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), S3Cnt, (current_realtime-start_realtime));
-      sem_post(&semS3);
-    }
-    #endif
+
   }
   
   clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
@@ -631,7 +627,11 @@ void *writeback_dump(void *threadp)
       clock_gettime(MY_CLOCK_TYPE, &current_time_val); current_realtime=realtime(&current_time_val);
       syslog(LOG_CRIT, "WB_THREAD on core %d for release %llu @ sec = %6.9lf\n", sched_getcpu(), WBCnt, (current_realtime-start_realtime)); 
     }
-        
+    
+    clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
+    writeback_time = dTime(ts_writeback_stop, ts_writeback_start);
+    syslog(LOG_INFO, "writeback_time individual is %Lf\n", writeback_time);
+    
     //if(frames_stored >= (WRITEBACK_FRAMES))
     if(frames_stored >= (number_of_frames_to_store))
     {
@@ -667,13 +667,13 @@ int save_image(int *frame_stored)
   }
   else
   {
+    //timestamping - transformation time - either yuyv to rgb or yuyv to negative
+    clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
+    
     //Extract the data from queue
     memcpy(&buffptr_rx_wb, buffer_receive_wb, (sizeof(void *)));
     memcpy(&l_frame_no_extract, &(buffer_receive_wb[sizeof(void *)]), (sizeof(int)));
     memcpy(&l_st_timespec_extract, &(buffer_receive_wb[sizeof(void *)+sizeof(int)]), (sizeof(struct timespec)));
-    
-    //timestamping - transformation time - either yuyv to rgb or yuyv to negative
-    clock_gettime(CLOCK_MONOTONIC, &ts_writeback_start);
     
     #if COLOR_CONVERT_RGB
     dump_ppm(buffptr_rx_wb, ((614400*6)/4), l_frame_no_extract, &l_st_timespec_extract);

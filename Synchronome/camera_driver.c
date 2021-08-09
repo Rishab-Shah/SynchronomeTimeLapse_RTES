@@ -164,10 +164,10 @@ void mainloop(void)
   }
   
   //start
-  if(framecnt > -1) 
-  {
-    clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
-  }
+  //if(framecnt > -1) 
+  //{
+  clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
+  //}
            
   if(read_frame())
   {
@@ -538,16 +538,10 @@ void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time)
   strcat(ppm_header+36, ppm_uname_string);
   strcat(ppm_header+122, ""HRES_STR" "VRES_STR"\n255\n");
 
-
-  
   // subtract 1 from sizeof header because it includes the null terminator for the string
   written=write(dumpfd, ppm_header, sizeof(ppm_header)-1);
 
   total=0;
-  
-  clock_gettime(CLOCK_MONOTONIC, &ts_writeback_stop);
-  //writeback_time[tag] = dTime(ts_writeback_stop, ts_writeback_start);
-  //syslog(LOG_INFO, "writeback_time individual is %lf\n", writeback_time[tag]);
 
   do
   {
