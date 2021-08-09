@@ -27,12 +27,14 @@
 #define NUM_CPU_CORES          (4)
 #define TRUE                   (1)
 #define FALSE                  (0)
-#define NUM_THREADS            (5)
+#define NUM_THREADS            (6)
                               
 #define CAMERA_1               (1)
 #define WRITEBACK_CORE         (3)
 
 
+int acq_freq_print;
+int other_freq_print;
 int running_frequency_acquisition;
 int fre_20_to_10_hz;
 int freq_1_is_to_1;
@@ -40,11 +42,14 @@ int freq_1_is_to_1;
 int number_of_frames_to_store;
 int fre_10_to_1_hz;
 extern int incrementer;
+extern int incrementer_sx;
 int start_up_condition;
 int transform_on_off;
 int num_of_mallocs = 20;
 
-int cpu_core[NUM_THREADS] = {1,1,1,2,2};
+//Sequencer, S1-Image,Sx_YUYV,S2-Process(YUYV to rgb), S3-(RGB to negaitive), S4 - toggle(core - 0 to 3)
+int cpu_core[NUM_THREADS] = {1,1,1,2,2,2};
+//WB - core 3 (0 to 3)
 // MQ - START
 
 extern void dump_ppm(const void *p, int size, unsigned int tag, struct timespec *time);
@@ -69,8 +74,8 @@ int running_frequency;
 struct timespec start_time_val;
 
 extern int abortTest;
-extern int abortS0, abortS1, abortS2, abortS3, abortS4;
-extern sem_t semS0, semS1, semS2, semS3, semS4;
+extern int abortS0, abortS1, abortSX, abortS2, abortS3, abortS4;
+extern sem_t semS0, semS1, semSX, semS2, semS3, semS4;
 extern double start_realtime;
 extern timer_t timer_1;
 extern struct itimerspec itime;
@@ -133,7 +138,9 @@ int main(int argc, char *argv[])
     if((strcmp(argv[1],"HZ_1_OFF_180")) == 0)
     {
       running_frequency_acquisition = HZ_10;
+      acq_freq_print = 10;
       running_frequency = HZ_10;
+      other_freq_print = 1;
       fre_10_to_1_hz = 1;
       transform_on_off = 0;
       number_of_frames_to_store = 180;
@@ -141,13 +148,17 @@ int main(int argc, char *argv[])
       freq_1_is_to_1 = 0;
       fre_20_to_10_hz = 0;
       printf("10 Hz to 1 Hz and color images as output - 180\n");
+      
+
       //exit(1);
     }
     /* 10:1 */
     else if((strcmp(argv[1],"HZ_1_ON_180")) == 0)
     {
       running_frequency_acquisition = HZ_10;
+      acq_freq_print = 10;
       running_frequency = HZ_10;
+      other_freq_print = 1;
       fre_10_to_1_hz = 1;
       transform_on_off = 1;
       number_of_frames_to_store = 180;
@@ -161,7 +172,9 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"HZ_10_OFF_1800")) == 0)
     {
       running_frequency_acquisition = HZ_10;
+      acq_freq_print = 10;
       running_frequency = HZ_10;
+      other_freq_print = 10;
       fre_10_to_1_hz = 0;
       transform_on_off = 0;
       number_of_frames_to_store = 1800;
@@ -175,7 +188,9 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"HZ_10_ON_1800")) == 0)
     {
       running_frequency_acquisition = HZ_10;
+      acq_freq_print = 10;
       running_frequency = HZ_10;
+      other_freq_print = 10;
       fre_10_to_1_hz = 0;
       transform_on_off = 1;
       number_of_frames_to_store = 1800;
@@ -189,7 +204,9 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"HZ_1_OFF_1800")) == 0)
     {
       running_frequency_acquisition = HZ_10;
+      acq_freq_print = 10;
       running_frequency = HZ_10;
+      other_freq_print = 1;
       fre_10_to_1_hz = 1;
       transform_on_off = 0;
       number_of_frames_to_store = 1800;
@@ -203,7 +220,9 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"HZ_1_ON_1800")) == 0)
     {
       running_frequency_acquisition = HZ_10;
+      acq_freq_print = 10;
       running_frequency = HZ_10;
+      other_freq_print = 1;
       fre_10_to_1_hz = 1;
       transform_on_off = 1;
       number_of_frames_to_store = 1800;
@@ -213,13 +232,30 @@ int main(int argc, char *argv[])
       printf("10 Hz to 1 Hz and negative images as output - 1800\n");
       //exit(1);
     }
-    else if((strcmp(argv[1],"EXP")) == 0)
+    else if((strcmp(argv[1],"HZ_20_ON_1800")) == 0)
     {
       running_frequency_acquisition = HZ_20;
+      acq_freq_print = 20;
       running_frequency = HZ_10;
+      other_freq_print = 10;
       
       fre_10_to_1_hz = 0;
       transform_on_off = 1;
+      number_of_frames_to_store = 1800;
+      freq_1_is_to_1 = 0;
+      fre_20_to_10_hz = 1;
+      printf("20 Hz to 10 Hz and color images as output - 1800\n");
+      //exit(1);
+    }
+    else if((strcmp(argv[1],"HZ_20_OFF_1800")) == 0)
+    {
+      running_frequency_acquisition = HZ_20;
+      acq_freq_print = 20;
+      running_frequency = HZ_10;
+      other_freq_print = 10;
+      
+      fre_10_to_1_hz = 0;
+      transform_on_off = 0;
       number_of_frames_to_store = 1800;
       freq_1_is_to_1 = 0;
       fre_20_to_10_hz = 1;
@@ -236,12 +272,14 @@ int main(int argc, char *argv[])
     else if((strcmp(argv[1],"help")) == 0)
     {
       printf("HELP\n");
-      printf("DEMO::10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_180\n");
-      printf("DEMO::10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_180\n");
-      printf("10 Hz everything and color images as output     -- sudo ./run HZ_10_OFF_1800\n");
-      printf("10 Hz everything and negative images as output  -- sudo ./run HZ_10_ON_1800\n");
-      printf("10 Hz to 1 Hz and color images as output        -- sudo ./run HZ_1_OFF_1800\n");
-      printf("10 Hz to 1 Hz and negative images as output     -- sudo ./run HZ_1_ON_1800\n");
+      printf("DEMO::10 Hz to 1 Hz and color images as output         -- sudo ./run HZ_1_OFF_180\n");
+      printf("DEMO::10 Hz to 1 Hz and negative images as output      -- sudo ./run HZ_1_ON_180\n");
+      printf("DEMO::20 Hz to 10 Hz and color images as output        -- sudo ./run HZ_20_OFF_1800\n");
+      printf("DEMO::20 Hz to 10 Hz and negative images as output     -- sudo ./run HZ_20_ON_1800\n");
+      printf("10 Hz everything and color images as output            -- sudo ./run HZ_10_OFF_1800\n");
+      printf("10 Hz everything and negative images as output         -- sudo ./run HZ_10_ON_1800\n");
+      printf("10 Hz to 1 Hz and color images as output               -- sudo ./run HZ_1_OFF_1800\n");
+      printf("10 Hz to 1 Hz and negative images as output            -- sudo ./run HZ_1_ON_1800\n");
       exit(1);
     }
     else
@@ -301,6 +339,7 @@ int main(int argc, char *argv[])
   // initialize the sequencer semaphores
   if (sem_init (&semS0, 0, 0)) { printf ("Failed to initialize S0 semaphore\n"); exit (-1); }
   if (sem_init (&semS1, 0, 0)) { printf ("Failed to initialize S1 semaphore\n"); exit (-1); }
+  if (sem_init (&semSX, 0, 0)) { printf ("Failed to initialize SX semaphore\n"); exit (-1); }
   if (sem_init (&semS2, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
   if (sem_init (&semS3, 0, 0)) { printf ("Failed to initialize S3 semaphore\n"); exit (-1); }
   if (sem_init (&semS4, 0, 0)) { printf ("Failed to initialize S4 semaphore\n"); exit (-1); }
@@ -379,37 +418,48 @@ int main(int argc, char *argv[])
       perror("pthread_create for service 1 - V4L2 video frame acquisition\n");
   else
       printf("pthread_create successful for service 1\n");
-      
-  // Service_2 = YUYV to RGB
+  //pthread_detach(threads[1]);
+   
+  // Service_X = YUYV processor  
   rt_param[2].sched_priority=rt_max_prio-3;
   pthread_attr_setschedparam(&rt_sched_attr[2], &rt_param[2]);
-  rc=pthread_create(&threads[2], &rt_sched_attr[2], Service_2_frame_process, (void *)&(threadParams[2]));
+  rc=pthread_create(&threads[2],&rt_sched_attr[2], Service_X_frame_diff,(void *)&(threadParams[2]));
+  if(rc < 0)
+      perror("pthread_create for service X - V4L2 video frame yuyv\n");
+  else
+      printf("pthread_create successful for service X\n");
+  pthread_detach(threads[2]); //yuyv
+      
+  // Service_2 = YUYV to RGB
+  rt_param[3].sched_priority=rt_max_prio-4;
+  pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
+  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_2_frame_process, (void *)&(threadParams[3]));
   if(rc < 0)
       perror("pthread_create for service 2 - flash frame storage\n");
   else
       printf("pthread_create successful for service 2\n");
-  pthread_detach(threads[2]); //color
+  pthread_detach(threads[3]); //color
 
-  rt_param[3].sched_priority=rt_max_prio-4;
-  pthread_attr_setschedparam(&rt_sched_attr[3], &rt_param[3]);
-  rc=pthread_create(&threads[3], &rt_sched_attr[3], Service_3_transformation_process, (void *)&(threadParams[3]));
+  rt_param[4].sched_priority=rt_max_prio-5;
+  pthread_attr_setschedparam(&rt_sched_attr[4], &rt_param[4]);
+  rc=pthread_create(&threads[4], &rt_sched_attr[4], Service_3_transformation_process, (void *)&(threadParams[4]));
   if(rc < 0)
       perror("pthread_create for service 3 - rgb to negative\n");
   else
       printf("pthread_create successful for service 3\n");
-  pthread_detach(threads[3]); //transformation
+  pthread_detach(threads[4]); //transformation
       
   // Service_3 = transform on/off
-  rt_param[4].sched_priority=rt_max_prio-5;
-  pthread_attr_setschedparam(&rt_sched_attr[4], &rt_param[4]);
-  rc=pthread_create(&threads[4], &rt_sched_attr[4], Service_4_transformation_on_off, (void *)&(threadParams[4]));
+  rt_param[5].sched_priority=rt_max_prio-6;
+  pthread_attr_setschedparam(&rt_sched_attr[5], &rt_param[5]);
+  rc=pthread_create(&threads[5], &rt_sched_attr[5], Service_4_transformation_on_off, (void *)&(threadParams[5]));
   if(rc < 0)
       perror("pthread_create for service 4 - transform on off\n");
   else
       printf("pthread_create successful for service 4\n");
-  pthread_detach(threads[4]); //getchar()
+  pthread_detach(threads[5]); //getchar()
   
-  writeback_threadparam.threadIdx = 8;
+  writeback_threadparam.threadIdx = 9;
   pthread_create(&writeback_thread, &writeback_sched_attr, writeback_dump, (void *)&writeback_threadparam);
       
   set_sequencer_timer_interval();
@@ -517,11 +567,12 @@ void set_sequencer_timer_interval()
 
 void init_variables()
 {
-  abortS0=FALSE; abortS1=FALSE; abortS2=FALSE; abortS3=FALSE; abortS4=FALSE;
+  abortS0=FALSE; abortS1=FALSE; abortSX=FALSE; abortS2=FALSE; abortS3=FALSE; abortS4=FALSE;
   seqCnt = 0;
   
   running_frequency = HZ_1;//1 hz
   incrementer = 0;
+  incrementer_sx = 0;
   num_of_mallocs = 20;
   transform_on_off = 1;
   start_up_condition = 0;

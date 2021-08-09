@@ -82,7 +82,7 @@ struct timespec ts_read_capture_start,ts_read_capture_stop;
 /* end to end time */
 struct timespec ts_negative_transformation_time_start,ts_negative_transformation_time_stop;
 //double negative_transformation_time[BUFF_LENGTH];
-
+struct timespec ts_yuyv_start,ts_yuyv_stop;
 
 
 void v4l2_frame_acquisition_initialization();
@@ -141,7 +141,7 @@ void mainloop(void)
   FD_SET(fd, &fds);
   
   /* Timeout */
-  tv.tv_sec = 2;
+  tv.tv_sec = 5;
   tv.tv_usec = 0;
   
   rc = select(fd + 1, &fds, NULL, NULL, &tv);
@@ -162,13 +162,9 @@ void mainloop(void)
   {
     /* Do Nothing */
   }
-  
-  //start
-  //if(framecnt > -1) 
-  //{
+
   clock_gettime(CLOCK_MONOTONIC, &ts_read_capture_start);
-  //}
-           
+         
   if(read_frame())
   {
     //Some storing operation required.
@@ -349,7 +345,6 @@ void process_transform(const void *p, int size)
     /* Do nothing */
   }
 }
-
 
 
 void process_image(const void *p, int size)

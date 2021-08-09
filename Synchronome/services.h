@@ -26,6 +26,7 @@
 #define FALSE                 (0)
 
 #define SNDRCV_MQ	            ("/send_receive_mq_image")
+#define SNDRCV_YUYV_RGB	      ("/send_receive_mq_SNDRCV_YUYV_RGB")
 #define SNDRCV_MQ_2           ("/send_receive_mq_image_2")
 #define SNDRCV_MQ_3           ("/send_receive_mq_image_3")
 
@@ -34,6 +35,9 @@
 
 void *Service_0_Sequencer(void *threadp);
 void *Service_1_frame_acquisition(void *threadp);
+
+void *Service_X_frame_diff(void *threadp);
+
 void *Service_2_frame_process(void *threadp);
 void *Service_3_transformation_process(void *threadp);
 void *Service_4_transformation_on_off(void *threadp);
